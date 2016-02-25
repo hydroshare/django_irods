@@ -10,10 +10,11 @@ from django_irods.storage import IrodsStorage
 from django.conf import settings
 from django.http import HttpResponse, FileResponse
 
-from hs_core.views.utils import authorize
+from hs_core.views.utils import authorize, Action_To_Authorize
 from hs_core.hydroshare.hs_bagit import create_bag_by_irods
 from . import models as m
 from .icommands import Session, GLOBAL_SESSION
+
 
 @api_view(['GET'])
 def download(request, path, *args, **kwargs):
@@ -23,7 +24,8 @@ def download(request, path, *args, **kwargs):
         res_id = os.path.splitext(split_path_strs[1])[0]
     else:
         res_id = split_path_strs[0]
-    _, authorized, _ = authorize(request, res_id, edit=True, full=True, view=True, superuser=True, raises_exception=False)
+    _, authorized, _ = authorize(request, res_id, needed_permission=Action_To_Authorize.VIEW_RESOURCE,
+                                 raises_exception=False)
     if not authorized:
         response = HttpResponse()
         response.content = "<h1>You do not have permission to download this resource!</h1>"
