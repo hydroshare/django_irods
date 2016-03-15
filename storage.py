@@ -114,7 +114,7 @@ class IrodsStorage(Storage):
             self.session.run("icp", None, '-rf', src_name, dest_name)
         return
 
-    def saveFile(self, from_name, to_name, create_directory = False):
+    def saveFile(self, from_name, to_name, create_directory=False, data_type_str=''):
         """
         Parameters:
         :param
@@ -129,11 +129,18 @@ class IrodsStorage(Storage):
             self.session.run("imkdir", None, '-p', splitstrs[0])
             if len(splitstrs) <= 1:
                 return
+
         if from_name:
             try:
-                self.session.run("iput", None, '-f', from_name, to_name)
+                if data_type_str:
+                    self.session.run("iput", None, '-D', data_type_str, '-f', from_name, to_name)
+                else:
+                    self.session.run("iput", None, '-f', from_name, to_name)
             except:
-                self.session.run("iput", None, '-f', from_name, to_name) # IRODS 4.0.2, sometimes iput fails on the first try.  A second try seems to fix it.
+                if data_type_str:
+                    self.session.run("iput", None, '-D', data_type_str, '-f', from_name, to_name)
+                else:
+                    self.session.run("iput", None, '-f', from_name, to_name) # IRODS 4.0.2, sometimes iput fails on the first try.  A second try seems to fix it.
         return
 
     def _open(self, name, mode='rb'):
