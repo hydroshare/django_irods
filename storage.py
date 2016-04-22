@@ -179,9 +179,13 @@ class IrodsStorage(Storage):
         directory_prefix = "  C- " + directory + "/"
         for i in range(1, len(stdout)):
             if stdout[i][:len(directory_prefix)] == directory_prefix:
-                listing[0].append(stdout[i][len(directory_prefix):])
+                dirname = stdout[i][len(directory_prefix):].strip()
+                if dirname:
+                    listing[0].append(dirname)
             else:
-                listing[1].append(stdout[i].strip)
+                filename = stdout[i].strip()
+                if filename:
+                    listing[1].append(filename)
         return listing
 
     def size(self, name):
