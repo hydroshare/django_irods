@@ -1,5 +1,6 @@
 import os
 from tempfile import NamedTemporaryFile
+from uuid import uuid4
 
 from django.utils.deconstruct import deconstructible
 from django.conf import settings
@@ -17,7 +18,7 @@ class IrodsStorage(Storage):
         self.environment = GLOBAL_ENVIRONMENT
         icommands.ACTIVE_SESSION = self.session
 
-    def set_user_session(self, username=None, password=None, host=settings.IRODS_HOST, port=settings.IRODS_PORT, def_res=None, zone=settings.IRODS_ZONE, userid=0, sessid='None'):
+    def set_user_session(self, username=None, password=None, host=settings.IRODS_HOST, port=settings.IRODS_PORT, def_res=None, zone=settings.IRODS_ZONE, userid=0):
         homedir = "/"+zone+"/home/"+username
         userEnv = IRodsEnv(
                pk=userid,
@@ -30,7 +31,7 @@ class IrodsStorage(Storage):
                zone=zone,
                auth=password
             )
-        self.session = Session(session_id=sessid)
+        self.session = Session(session_id=uuid4())
         self.environment = self.session.create_environment(myEnv=userEnv)
         self.session.run('iinit', None, self.environment.auth)
         icommands.ACTIVE_SESSION = self.session

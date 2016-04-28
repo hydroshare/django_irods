@@ -12,6 +12,7 @@ from django.http import HttpResponse, FileResponse
 
 from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
 from hs_core.hydroshare.hs_bagit import create_bag_by_irods
+from hs_core.hydroshare.utils import set_user_zone_session
 from . import models as m
 from .icommands import Session, GLOBAL_SESSION
 
@@ -31,19 +32,6 @@ def download(request, path, *args, **kwargs):
         response.content = "<h1>You do not have permission to download this resource!</h1>"
         return response
 
-    if 'environment' in kwargs:
-        environment = int(kwargs['environment'])
-        environment = m.RodsEnvironment.objects.get(pk=environment)
-        session = Session("/tmp/django_irods", settings.IRODS_ICOMMANDS_PATH, session_id=uuid4())
-        session.create_environment(environment)
-        session.run('iinit', None, environment.auth)
-    elif getattr(settings, 'IRODS_GLOBAL_SESSION', False):
-        session = GLOBAL_SESSION
-    elif icommands.ACTIVE_SESSION:
-        session = icommands.ACTIVE_SESSION
-    else:
-        raise KeyError('settings must have IRODS_GLOBAL_SESSION set if there is no environment object')
-
     # do on-demand bag creation
     istorage = IrodsStorage()
     bag_modified = "false"
@@ -55,6 +43,24 @@ def download(request, path, *args, **kwargs):
         create_bag_by_irods(res_id, istorage)
         if istorage.exists(res_id):
             istorage.setAVU(res_id, 'bag_modified', "false")
+
+    if 'environment' in kwargs:
+        environment = int(kwargs['environment'])
+        environment = m.RodsEnvironment.objects.get(pk=environment)
+        session = Session("/tmp/django_irods", settings.IRODS_ICOMMANDS_PATH, session_id=uuid4())
+        session.create_environment(environment)
+        session.run('iinit', None, environment.auth)
+    elif 'hydroshareuserZone' in split_path_strs:
+        set_user_zone_session(request.user, istorage)
+        session = istorage.session
+        # remove 32-bit res_id from path so that content can be iget from iRODS user zone
+        path = path[32:]
+    elif getattr(settings, 'IRODS_GLOBAL_SESSION', False):
+        session = GLOBAL_SESSION
+    elif icommands.ACTIVE_SESSION:
+        session = icommands.ACTIVE_SESSION
+    else:
+        raise KeyError('settings must have IRODS_GLOBAL_SESSION set if there is no environment object')
 
     # obtain mime_type to set content_type
     mtype = 'application-x/octet-stream'
