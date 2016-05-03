@@ -39,6 +39,9 @@ class IrodsStorage(Storage):
     def download(self, name):
         return self._open(name, mode='rb')
 
+    def getFile(self, src_name, dest_name):
+        self.session.run("iget", None, '-f', src_name, dest_name)
+
     def runBagitRule(self, rule_name, input_path, input_resource):
         """
         run iRODS bagit rule which generated bag-releated files without bundling
