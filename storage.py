@@ -179,7 +179,7 @@ class IrodsStorage(Storage):
     def listdir(self, path):
         stdout = self.session.run("ils", None, path)[0].split("\n")
         listing = ( [], [] )
-        directory = stdout[0][0:-2]
+        directory = stdout[0][0:-1]
         directory_prefix = "  C- " + directory + "/"
         for i in range(1, len(stdout)):
             if stdout[i][:len(directory_prefix)] == directory_prefix:
