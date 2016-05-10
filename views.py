@@ -53,8 +53,9 @@ def download(request, path, *args, **kwargs):
     elif 'hydroshareuserZone' in split_path_strs:
         set_user_zone_session(request.user, istorage)
         session = istorage.session
-        # remove 32-bit res_id from path so that content can be iget from iRODS user zone
-        path = path[32:]
+        # find the path in iRODS user zone so that content can be iget from iRODS user zone
+        idx = path.index('/hydroshareuserZone/home/')
+        path = path[idx:]
     elif getattr(settings, 'IRODS_GLOBAL_SESSION', False):
         session = GLOBAL_SESSION
     elif icommands.ACTIVE_SESSION:
