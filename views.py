@@ -40,8 +40,13 @@ def download(request, path, *args, **kwargs):
     if istorage.exists(res_id):
         bag_modified = istorage.getAVU(res_id, 'bag_modified')
     if bag_modified == "true":
-        create_bag_by_irods(res_id, istorage)
-        if istorage.exists(res_id):
+        ret_status = create_bag_by_irods(res_id, istorage)
+        # only reset bag_modified to true when create_bag_by_irods succeeds.
+        # At this point the irods exception is not populated to the web front end
+        # as a workaround since race condition is not handled on iRODS side for
+        # bag creation and we don't want to show race condition-related iRODs exceptions
+        # when bag download can still proceed successfully.
+        if istorage.exists(res_id) and ret_status:
             istorage.setAVU(res_id, 'bag_modified', "false")
 
     if 'environment' in kwargs:
