@@ -12,7 +12,6 @@ from django.http import HttpResponse, FileResponse
 
 from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
 from hs_core.hydroshare.hs_bagit import create_bag_by_irods
-from hs_core.hydroshare.utils import set_user_zone_session
 from . import models as m
 from .icommands import Session, GLOBAL_SESSION
 
@@ -55,12 +54,6 @@ def download(request, path, *args, **kwargs):
         session = Session("/tmp/django_irods", settings.IRODS_ICOMMANDS_PATH, session_id=uuid4())
         session.create_environment(environment)
         session.run('iinit', None, environment.auth)
-    elif 'hydroshareuserZone' in split_path_strs:
-        set_user_zone_session(request.user, istorage)
-        session = istorage.session
-        # find the path in iRODS user zone so that content can be iget from iRODS user zone
-        idx = path.index('/hydroshareuserZone/home/')
-        path = path[idx:]
     elif getattr(settings, 'IRODS_GLOBAL_SESSION', False):
         session = GLOBAL_SESSION
     elif icommands.ACTIVE_SESSION:
