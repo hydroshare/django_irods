@@ -118,6 +118,19 @@ class IrodsStorage(Storage):
             self.session.run("icp", None, '-rf', src_name, dest_name)
         return
 
+    def moveFile(self, src_name, dest_name):
+        """
+        Parameters:
+        :param
+        src_name: the iRODS data-object or collection name to be moved from.
+        dest_name: the iRODS data-object or collection name to be moved to
+        moveFile() moves/renames an irods data-object (file) or collection (directory) to another data-object or collection
+        """
+
+        if src_name and dest_name:
+            self.session.run("imv", None, src_name, dest_name)
+        return
+
     def saveFile(self, from_name, to_name, create_directory=False, data_type_str=''):
         """
         Parameters:
