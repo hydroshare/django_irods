@@ -12,21 +12,19 @@ from django.http import HttpResponse, FileResponse
 
 from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
 from hs_core.hydroshare.hs_bagit import create_bag_by_irods
-from hs_core.hydroshare.utils import set_fed_zone_session
 from . import models as m
 from .icommands import Session, GLOBAL_SESSION
 
 
 @api_view(['GET'])
 def download(request, path, *args, **kwargs):
-    istorage = IrodsStorage()
     idx = -1
     federated_path = ''
     if settings.HS_LOCAL_PROXY_USER_IN_FED_ZONE:
         idx = path.find(settings.HS_LOCAL_PROXY_USER_IN_FED_ZONE)
     if idx > 0:
         # the resource is stored in federated zone
-        set_fed_zone_session(istorage)
+        istorage = IrodsStorage('federated')
         session = icommands.ACTIVE_SESSION
         s_idx = idx + len(settings.HS_LOCAL_PROXY_USER_IN_FED_ZONE)+1
         rel_path = path[s_idx:]
@@ -35,6 +33,7 @@ def download(request, path, *args, **kwargs):
         path = '/{}'.format(path)
         federated_path = path[:s_idx]
     else:
+        istorage = IrodsStorage()
         split_path_strs = path.split('/')
         if 'environment' in kwargs:
             environment = int(kwargs['environment'])

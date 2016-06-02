@@ -10,13 +10,16 @@ from django.core.urlresolvers import reverse
 from django_irods import icommands
 from icommands import Session, GLOBAL_SESSION, GLOBAL_ENVIRONMENT, SessionException, IRodsEnv
 
-
 @deconstructible
 class IrodsStorage(Storage):
     def __init__(self, option=None):
-        self.session = GLOBAL_SESSION
-        self.environment = GLOBAL_ENVIRONMENT
-        icommands.ACTIVE_SESSION = self.session
+        if option == 'federated':
+            # resource should be saved in federated zone
+            self.set_fed_zone_session()
+        else:
+            self.session = GLOBAL_SESSION
+            self.environment = GLOBAL_ENVIRONMENT
+            icommands.ACTIVE_SESSION = self.session
 
     def set_user_session(self, username=None, password=None, host=settings.IRODS_HOST, port=settings.IRODS_PORT, def_res=None, zone=settings.IRODS_ZONE, userid=0):
         homedir = "/"+zone+"/home/"+username
@@ -35,6 +38,20 @@ class IrodsStorage(Storage):
         self.environment = self.session.create_environment(myEnv=userEnv)
         self.session.run('iinit', None, self.environment.auth)
         icommands.ACTIVE_SESSION = self.session
+
+    #Set iRODS session to wwwHydroProxy for irods_storage input object for iRODS federated zone direct file operations
+    def set_fed_zone_session(self):
+        from hs_core.hydroshare.utils import is_in_production
+        in_production = is_in_production()
+        if not in_production:
+            # for testing in an environment other than production, has to switch irods session
+            # to hydroshare production proxy iRODS user
+            self.set_user_session(username=settings.HS_WWW_IRODS_PROXY_USER,
+                                  password=settings.HS_WWW_IRODS_PROXY_USER_PWD,
+                                  host=settings.HS_WWW_IRODS_HOST,
+                                  port=settings.IRODS_PORT,
+                                  def_res=settings.HS_IRODS_LOCAL_ZONE_DEF_RES,
+                                  zone=settings.HS_WWW_IRODS_ZONE)
 
     def download(self, name):
         return self._open(name, mode='rb')
