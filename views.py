@@ -29,8 +29,9 @@ def download(request, path, *args, **kwargs):
         s_idx = idx + len(settings.HS_LOCAL_PROXY_USER_IN_FED_ZONE)+1
         rel_path = path[s_idx:]
         split_path_strs = rel_path.split('/')
-        # prepend / so that path for federated zone is absolute path
-        path = '/{}'.format(path)
+        # prepend / as needed so that path for federated zone is absolute path
+        if not path.startswith('/'):
+            path = '/{}'.format(path)
         federated_path = path[:s_idx]
     else:
         istorage = IrodsStorage()
@@ -64,7 +65,10 @@ def download(request, path, *args, **kwargs):
     # needs to check whether res_id collection exists before getting/setting AVU on it to accommodate the case
     # where the very same resource gets deleted by another request when it is getting downloaded
     if federated_path:
-        res_root = '{}/{}'.format(federated_path, res_id)
+        if federated_path.endswith('/'):
+            res_root = '{}{}'.format(federated_path, res_id)
+        else:
+            res_root = '{}/{}'.format(federated_path, res_id)
     else:
         res_root = res_id
     if istorage.exists(res_root):
