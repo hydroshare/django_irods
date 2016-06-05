@@ -141,8 +141,10 @@ class IrodsStorage(Storage):
         dest_name: the iRODS data-object or collection name to be moved to
         moveFile() moves/renames an irods data-object (file) or collection (directory) to another data-object or collection
         """
-
         if src_name and dest_name:
+            splitstrs = dest_name.rsplit('/', 1)
+            if not self.exists(splitstrs[0]):
+                self.session.run("imkdir", None, '-p', splitstrs[0])
             self.session.run("imv", None, src_name, dest_name)
         return
 
