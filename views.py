@@ -12,6 +12,7 @@ from django.http import HttpResponse, FileResponse
 
 from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
 from hs_core.hydroshare.hs_bagit import create_bag_by_irods
+from hs_core.hydroshare.resource import FILE_SIZE_LIMIT
 from . import models as m
 from .icommands import Session, GLOBAL_SESSION
 
@@ -92,13 +93,18 @@ def download(request, path, *args, **kwargs):
     # retrieve file size to set up Content-Length header
     stdout = session.run("ils", None, "-l", path)[0].split()
     flen = int(stdout[3])
-
-    options = ('-',) # we're redirecting to stdout.
-    proc = session.run_safe('iget', None, path, *options)
-    response = FileResponse(proc.stdout, content_type=mtype)
-    response['Content-Disposition'] = 'attachment; filename="{name}"'.format(name=path.split('/')[-1])
-    response['Content-Length'] = flen
-    return response
+    if flen <= FILE_SIZE_LIMIT:
+        options = ('-',) # we're redirecting to stdout.
+        proc = session.run_safe('iget', None, path, *options)
+        response = FileResponse(proc.stdout, content_type=mtype)
+        response['Content-Disposition'] = 'attachment; filename="{name}"'.format(name=path.split('/')[-1])
+        response['Content-Length'] = flen
+        return response
+    else:
+        response = HttpResponse()
+        response.content = "<h1>File larger than 1GB cannot be downloaded directly via HTTP." \
+                           "Please download the large file via iRODS clients.</h1>"
+        return response
 
 
 def list(request, *args, **kwargs):
