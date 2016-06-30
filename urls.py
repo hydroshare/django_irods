@@ -4,6 +4,6 @@ urlpatterns = patterns('',
 
     # users API
 
-    url(r'^download/$', 'django_irods.views.download'),
+    url(r'^download/(?P<path>.*)$', 'django_irods.views.download'),
     url(r'^list/$', 'django_irods.views.list'),
 )

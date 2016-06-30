@@ -59,20 +59,21 @@ class Session(object):
                auth=settings.IRODS_AUTH
             )
 
-        # create .irodsEnv file
+        # create irods_environment.json file
         if not os.path.exists(self.session_path):
             os.makedirs(self.session_path)
-        
-        env_path = "{session_path}/.irodsEnv".format(session_path=self.session_path)
+
+        env_path = "{session_path}/irods_environment.json".format(session_path=self.session_path)
         with open(env_path, "w") as env_file:
-            env_file.write(textwrap.dedent("""\
-                irodsHost '{host}'
-                irodsPort '{port}'
-                irodsDefResource '{def_res}'
-                irodsHome '{home_coll}'
-                irodsCwd '{cwd}'
-                irodsUserName '{username}'
-                irodsZone '{zone}'
+            env_pre_str = "{\n"
+            env_str = textwrap.dedent("""\
+                "irods_host": "{host}",
+                "irods_port": {port},
+                "irods_default_resource": "{def_res}",
+                "irods_home": "{home_coll}",
+                "irods_cwd": "{cwd}",
+                "irods_user_name": "{username}",
+                "irods_zone_name": "{zone}"
             """).format(
                 host=myEnv.host,
                 port=myEnv.port,
@@ -81,7 +82,10 @@ class Session(object):
                 username=myEnv.username,
                 cwd=myEnv.cwd,
                 zone=myEnv.zone
-            ))
+            )
+            env_post_str = "}"
+            env_file.write('{line1}{line2}{line3}'.format(line1=env_pre_str, line2=env_str, line3=env_post_str))
+
         return myEnv
 
     def delete_environment(self):
@@ -92,10 +96,10 @@ class Session(object):
         shutil.rmtree(self.session_path)
 
     def session_file_exists(self):
-        """Checks for the presence of .irodsEnv in temporary sessionDir.
+        """Checks for the presence of irods_environment.json in temporary sessionDir.
         """
         try:
-            if os.path.exists(os.path.join(self.session_path, '.irodsEnv')):
+            if os.path.exists(os.path.join(self.session_path, 'irods_environment.json')):
                 return True
         except:
             return False
@@ -104,33 +108,33 @@ class Session(object):
 
     @property
     def zone(self):
-        """Returns current zone name from .irodsEnv or an empty string
+        """Returns current zone name from irods_environment.json or an empty string
         if the file does not exist.
         """
         zone_name = ""
         if not self.session_file_exists():
             return zone_name
-        envfilename = "%s/.irodsEnv" % (self.session_path)
+        envfilename = "%s/irods_environment.json" % (self.session_path)
         envfile = open(envfilename)
         for line in envfile:
-            if 'irodsZone' in line:
+            if "irods_zone_name" in line:
                 zone_name = line.split()[1]
         envfile.close()
         return zone_name
 
     @property
     def username(self):
-        """Returns current irodsUserName from .irodsEnv or an empty string
+        """Returns current irodsUserName from irods_environment.json or an empty string
         if the file does not exist.
         """
         user_name = ""
         if not self.session_file_exists():
             return user_name
 
-        envfilename = os.path.join(self.session_path, ".irodsEnv")
+        envfilename = os.path.join(self.session_path, "irods_environment.json")
         envfile = open(envfilename)
         for line in envfile:
-            if 'irodsUserName' in line:
+            if "irods_user_name" in line:
                 user_name = line.split()[1]
         envfile.close()
         return user_name
@@ -143,8 +147,8 @@ class Session(object):
         """
 
         myenv = os.environ.copy()
-        myenv['irodsEnvFile'] = os.path.join(self.session_path, ".irodsEnv")
-        myenv['irodsAuthFileName'] = os.path.join(self.session_path, ".irodsA")
+        myenv['IRODS_ENVIRONMENT_FILE'] = os.path.join(self.session_path, "irods_environment.json")
+        myenv['IRODS_AUTHENTICATION_FILE'] = os.path.join(self.session_path, ".irodsA")
 
         cmdStr = os.path.join(self.icommands_path, icommand)
         argList = [cmdStr]
@@ -170,8 +174,8 @@ class Session(object):
 
     def run_safe(self, icommand, data=None, *args):
         myenv = os.environ.copy()
-        myenv['irodsEnvFile'] = os.path.join(self.session_path, ".irodsEnv")
-        myenv['irodsAuthFileName'] = os.path.join(self.session_path, ".irodsA")
+        myenv['IRODS_ENVIRONMENT_FILE'] = os.path.join(self.session_path, "irods_environment.json")
+        myenv['IRODS_AUTHENTICATION_FILE'] = os.path.join(self.session_path, ".irodsA")
 
         cmdStr = os.path.join(self.icommands_path, icommand)
         argList = [cmdStr]
@@ -193,8 +197,8 @@ class Session(object):
 
     def runbatch(self, *icommands):
         myenv = os.environ.copy()
-        myenv['irodsEnvFile'] = os.path.join(self.session_path, ".irodsEnv")
-        myenv['irodsAuthFileName'] = os.path.join(self.session_path, ".irodsA")
+        myenv['IRODS_ENVIRONMENT_FILE'] = os.path.join(self.session_path, "irods_environment.json")
+        myenv['IRODS_AUTHENTICATION_FILE'] = os.path.join(self.session_path, ".irodsA")
         return_codes = []
 
         for icommand, args in icommands:
@@ -218,8 +222,8 @@ class Session(object):
         # should probably also add a condition to restrict
         # possible values for icommandsDir
         myenv = os.environ.copy()
-        myenv['irodsEnvFile'] = "%s/.irodsEnv" % (self.session_path)
-        myenv['irodsAuthFileName'] = "%s/.irodsA" % (self.session_path)
+        myenv['IRODS_ENVIRONMENT_FILE'] = "%s/irods_environment.json" % (self.session_path)
+        myenv['IRODS_AUTHENTICATION_FILE'] = "%s/.irodsA" % (self.session_path)
 
         cmdStr = "{icommands}/iadmin".format(icommands=self.icommands_path)
 
@@ -241,7 +245,6 @@ class Session(object):
         else:
             return stdout, stderr
 
-
 if getattr(settings, 'IRODS_GLOBAL_SESSION', False) and getattr(settings, 'USE_IRODS', False):
     GLOBAL_SESSION = Session()
     GLOBAL_ENVIRONMENT = GLOBAL_SESSION.create_environment()
@@ -250,3 +253,4 @@ else:
     GLOBAL_SESSION = None
     GLOBAL_ENVIRONMENT = None
 
+ACTIVE_SESSION = GLOBAL_SESSION

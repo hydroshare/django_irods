@@ -1,11 +1,10 @@
-from django.conf import settings
-from icommands import Session, GLOBAL_SESSION, SessionException
+from icommands import Session
 from django.utils.deconstruct import deconstructible
 
 @deconstructible
 class IrodsAccount():
     def __init__(self, option=None):
-        # always use GLOBAL_SESSION associated with admin for iRODS account creation
+        # always create a session associated with admin for iRODS account creation
         self.session = Session()
         self.session.run('iinit', None, self.session.create_environment().auth)
 
