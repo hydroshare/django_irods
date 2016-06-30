@@ -51,6 +51,14 @@ class IrodsStorage(Storage):
                                   port=settings.IRODS_PORT,
                                   def_res=settings.HS_IRODS_LOCAL_ZONE_DEF_RES,
                                   zone=settings.HS_WWW_IRODS_ZONE)
+        else:
+            # set either way until refactor takes place
+            self.set_user_session(username=settings.HS_WWW_IRODS_PROXY_USER,
+                                  password=settings.HS_WWW_IRODS_PROXY_USER_PWD,
+                                  host=settings.HS_WWW_IRODS_HOST,
+                                  port=settings.IRODS_PORT,
+                                  def_res=settings.HS_IRODS_LOCAL_ZONE_DEF_RES,
+                                  zone=settings.HS_WWW_IRODS_ZONE)
 
     def download(self, name):
         return self._open(name, mode='rb')
