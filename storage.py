@@ -41,18 +41,7 @@ class IrodsStorage(Storage):
 
     #Set iRODS session to wwwHydroProxy for irods_storage input object for iRODS federated zone direct file operations
     def set_fed_zone_session(self):
-        if settings.IRODS_USERNAME != settings.HS_WWW_IRODS_PROXY_USER and \
-                settings.HS_WWW_IRODS_PROXY_USER_PWD:
-            # for testing in an environment other than production, has to switch irods session
-            # to hydroshare production proxy iRODS user
-            self.set_user_session(username=settings.HS_WWW_IRODS_PROXY_USER,
-                                  password=settings.HS_WWW_IRODS_PROXY_USER_PWD,
-                                  host=settings.HS_WWW_IRODS_HOST,
-                                  port=settings.IRODS_PORT,
-                                  def_res=settings.HS_IRODS_LOCAL_ZONE_DEF_RES,
-                                  zone=settings.HS_WWW_IRODS_ZONE)
-        else:
-            # set either way until refactor takes place
+        if settings.REMOTE_USE_IRODS:
             self.set_user_session(username=settings.HS_WWW_IRODS_PROXY_USER,
                                   password=settings.HS_WWW_IRODS_PROXY_USER_PWD,
                                   host=settings.HS_WWW_IRODS_HOST,
