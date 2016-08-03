@@ -24,7 +24,7 @@ class IrodsStorage(Storage):
     def set_user_session(self, username=None, password=None, host=settings.IRODS_HOST,
                          port=settings.IRODS_PORT, def_res=None, zone=settings.IRODS_ZONE,
                          userid=0, sess_id=None):
-        homedir = "/"+zone+"/home/"+username
+        homedir = "/" + zone + "/home/" + username
         userEnv = IRodsEnv(
                pk=userid,
                host=host,
@@ -35,7 +35,7 @@ class IrodsStorage(Storage):
                username=username,
                zone=zone,
                auth=password
-            )
+        )
         if sess_id is None:
             self.session = Session(session_id=uuid4())
             self.environment = self.session.create_environment(myEnv=userEnv)
