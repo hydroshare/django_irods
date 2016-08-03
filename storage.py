@@ -21,8 +21,10 @@ class IrodsStorage(Storage):
             self.environment = GLOBAL_ENVIRONMENT
             icommands.ACTIVE_SESSION = self.session
 
-    def set_user_session(self, username=None, password=None, host=settings.IRODS_HOST, port=settings.IRODS_PORT, def_res=None, zone=settings.IRODS_ZONE, userid=0):
-        homedir = "/"+zone+"/home/"+username
+    def set_user_session(self, username=None, password=None, host=settings.IRODS_HOST,
+                         port=settings.IRODS_PORT, def_res=None, zone=settings.IRODS_ZONE,
+                         userid=0, sess_id=None):
+        homedir = "/" + zone + "/home/" + username
         userEnv = IRodsEnv(
                pk=userid,
                host=host,
@@ -33,9 +35,17 @@ class IrodsStorage(Storage):
                username=username,
                zone=zone,
                auth=password
-            )
-        self.session = Session(session_id=uuid4())
-        self.environment = self.session.create_environment(myEnv=userEnv)
+        )
+        if sess_id is None:
+            self.session = Session(session_id=uuid4())
+            self.environment = self.session.create_environment(myEnv=userEnv)
+        else:
+            self.session = Session(session_id=sess_id)
+            if self.session.session_file_exists():
+                self.environment = userEnv
+            else:
+                self.environment = self.session.create_environment(myEnv=userEnv)
+
         self.session.run('iinit', None, self.environment.auth)
         icommands.ACTIVE_SESSION = self.session
 
@@ -47,7 +57,14 @@ class IrodsStorage(Storage):
                                   host=settings.HS_WWW_IRODS_HOST,
                                   port=settings.IRODS_PORT,
                                   def_res=settings.HS_IRODS_LOCAL_ZONE_DEF_RES,
-                                  zone=settings.HS_WWW_IRODS_ZONE)
+                                  zone=settings.HS_WWW_IRODS_ZONE,
+                                  sess_id='federated_session')
+
+
+    def delete_user_session(self):
+        if self.session != GLOBAL_SESSION and self.session.session_file_exists():
+            self.session.delete_environment()
+
 
     def download(self, name):
         return self._open(name, mode='rb')
