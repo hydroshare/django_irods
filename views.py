@@ -13,8 +13,6 @@ from django.http import HttpResponse, FileResponse
 from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
 from hs_core.hydroshare.hs_bagit import create_bag_by_irods
 from hs_core.hydroshare.resource import FILE_SIZE_LIMIT
-from hs_core.signals import pre_download_file
-from hs_core.hydroshare import check_resource_type
 
 from . import models as m
 from .icommands import Session, GLOBAL_SESSION
@@ -53,8 +51,10 @@ def download(request, path, *args, **kwargs):
         else:
             raise KeyError('settings must have IRODS_GLOBAL_SESSION set if there is no environment object')
 
+    is_bag_download = False
     if split_path_strs[0] == 'bags':
         res_id = os.path.splitext(split_path_strs[1])[0]
+        is_bag_download = True
     else:
         res_id = split_path_strs[0]
     res, authorized, _ = authorize(request, res_id, needed_permission=ACTION_TO_AUTHORIZE.VIEW_RESOURCE,
@@ -64,33 +64,29 @@ def download(request, path, *args, **kwargs):
         response.content = "<h1>You do not have permission to download this resource!</h1>"
         return response
 
-    # send signal for pre download file
-    resource_cls = check_resource_type(res.resource_type)
-    download_file_name = split_path_strs[-1]
-    pre_download_file.send(sender=resource_cls, resource=res, download_file_name=download_file_name)
-
-    # do on-demand bag creation
-    bag_modified = "false"
-    # needs to check whether res_id collection exists before getting/setting AVU on it to accommodate the case
-    # where the very same resource gets deleted by another request when it is getting downloaded
-    if federated_path:
-        if federated_path.endswith('/'):
-            res_root = '{}{}'.format(federated_path, res_id)
+    if is_bag_download:
+        # do on-demand bag creation
+        bag_modified = "false"
+        # needs to check whether res_id collection exists before getting/setting AVU on it to accommodate the case
+        # where the very same resource gets deleted by another request when it is getting downloaded
+        if federated_path:
+            if federated_path.endswith('/'):
+                res_root = '{}{}'.format(federated_path, res_id)
+            else:
+                res_root = '{}/{}'.format(federated_path, res_id)
         else:
-            res_root = '{}/{}'.format(federated_path, res_id)
-    else:
-        res_root = res_id
-    if istorage.exists(res_root):
-        bag_modified = istorage.getAVU(res_root, 'bag_modified')
-    if bag_modified == "true":
-        ret_status = create_bag_by_irods(res_id, istorage)
-        # only reset bag_modified to true when create_bag_by_irods succeeds.
-        # At this point the irods exception is not populated to the web front end
-        # as a workaround since race condition is not handled on iRODS side for
-        # bag creation and we don't want to show race condition-related iRODs exceptions
-        # when bag download can still proceed successfully.
-        if istorage.exists(res_root) and ret_status:
-            istorage.setAVU(res_root, 'bag_modified', "false")
+            res_root = res_id
+        if istorage.exists(res_root):
+            bag_modified = istorage.getAVU(res_root, 'bag_modified')
+        if bag_modified == "true":
+            ret_status = create_bag_by_irods(res_id, istorage)
+            # only reset bag_modified to true when create_bag_by_irods succeeds.
+            # At this point the irods exception is not populated to the web front end
+            # as a workaround since race condition is not handled on iRODS side for
+            # bag creation and we don't want to show race condition-related iRODs exceptions
+            # when bag download can still proceed successfully.
+            if istorage.exists(res_root) and ret_status:
+                istorage.setAVU(res_root, 'bag_modified', "false")
 
     # obtain mime_type to set content_type
     mtype = 'application-x/octet-stream'
@@ -110,7 +106,7 @@ def download(request, path, *args, **kwargs):
         return response
     else:
         response = HttpResponse()
-        response.content = "<h1>File larger than 1GB cannot be downloaded directly via HTTP." \
+        response.content = "<h1>File larger than 1GB cannot be downloaded directly via HTTP. " \
                            "Please download the large file via iRODS clients.</h1>"
         return response
 
