@@ -122,4 +122,5 @@ def poll_for_download(request, *args, **kwargs):
     result = create_bag_by_irods.AsyncResult(task_id)
     if result.ready():
         return HttpResponse(json.dumps({"status": result.get()}))
-    return HttpResponse(json.dumps({"status": None}))
+    else:
+        return HttpResponse(json.dumps({"status": None}))
