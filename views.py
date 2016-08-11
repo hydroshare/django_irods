@@ -105,8 +105,7 @@ def download(request, path, *args, **kwargs):
         options = ('-',)  # we're redirecting to stdout.
         proc = session.run_safe('iget', None, path, *options)
         response = FileResponse(proc.stdout, content_type=mtype)
-        response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
-            name=path.split('/')[-1])
+        response['Content-Disposition'] = 'attachment; filename="{name}"'.format(name=path.split('/')[-1])
         response['Content-Length'] = flen
         return response
     else:
