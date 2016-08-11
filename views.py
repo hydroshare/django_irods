@@ -90,8 +90,7 @@ def download(request, path, *args, **kwargs):
     # send signal for pre download file
     resource_cls = check_resource_type(res.resource_type)
     download_file_name = split_path_strs[-1]
-    pre_download_file.send(sender=resource_cls, resource=res,
-                           download_file_name=download_file_name)
+    pre_download_file.send(sender=resource_cls, resource=res, download_file_name=download_file_name)
 
     # obtain mime_type to set content_type
     mtype = 'application-x/octet-stream'
