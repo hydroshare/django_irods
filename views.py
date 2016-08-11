@@ -14,6 +14,8 @@ from django.http import HttpResponse, FileResponse, HttpResponseRedirect
 from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
 from hs_core.tasks import create_bag_by_irods
 from hs_core.hydroshare.resource import FILE_SIZE_LIMIT
+from hs_core.signals import pre_download_file
+from hs_core.hydroshare import check_resource_type
 
 from . import models as m
 from .icommands import Session, GLOBAL_SESSION
@@ -84,6 +86,12 @@ def download(request, path, *args, **kwargs):
             request.session['task_id'] = task.task_id
             request.session['download_path'] = request.path
             return HttpResponseRedirect(res.get_absolute_url())
+
+    # send signal for pre download file
+    resource_cls = check_resource_type(res.resource_type)
+    download_file_name = split_path_strs[-1]
+    pre_download_file.send(sender=resource_cls, resource=res,
+                           download_file_name=download_file_name)
 
     # obtain mime_type to set content_type
     mtype = 'application-x/octet-stream'
