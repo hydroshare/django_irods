@@ -21,7 +21,7 @@ from . import models as m
 from .icommands import Session, GLOBAL_SESSION
 
 @api_view(['GET'])
-def download(request, path, *args, **kwargs):
+def download(request, path, rest_call=None, *args, **kwargs):
     idx = -1
     federated_path = ''
     if settings.HS_LOCAL_PROXY_USER_IN_FED_ZONE:
@@ -83,6 +83,11 @@ def download(request, path, *args, **kwargs):
         if bag_modified == "true":
             task = create_bag_by_irods.apply_async((res_id, istorage),
                                                   countdown=3)
+            if rest_call:
+                return HttpResponse({'bag_status': 'Not ready',
+                                         'task_id': task.task_id},
+                                        content_type="application/json")
+
             request.session['task_id'] = task.task_id
             request.session['download_path'] = request.path
             return HttpResponseRedirect(res.get_absolute_url())
@@ -115,7 +120,7 @@ def download(request, path, *args, **kwargs):
         return response
 
 
-def poll_for_download(request, *args, **kwargs):
+def check_task_status(request, *args, **kwargs):
     '''
     A view function to tell the client if the asynchronous create_bag_by_irods()
     task is done and the bag file is ready for download.
@@ -124,7 +129,7 @@ def poll_for_download(request, *args, **kwargs):
     Returns:
         JSON response to return result from asynchronous task create_bag_by_irods
     '''
-    task_id = request.POST.get("task_id")
+    task_id = request.GET.get('task_id')
     result = create_bag_by_irods.AsyncResult(task_id)
     if result.ready():
         return HttpResponse(json.dumps({"status": result.get()}))
