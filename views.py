@@ -120,7 +120,7 @@ def download(request, path, rest_call=None, *args, **kwargs):
         return response
 
 
-def check_task_status(request, *args, **kwargs):
+def check_task_status(request, task_id=None, *args, **kwargs):
     '''
     A view function to tell the client if the asynchronous create_bag_by_irods()
     task is done and the bag file is ready for download.
@@ -129,7 +129,8 @@ def check_task_status(request, *args, **kwargs):
     Returns:
         JSON response to return result from asynchronous task create_bag_by_irods
     '''
-    task_id = request.GET.get('task_id')
+    if not task_id:
+        task_id = request.POST.get('task_id')
     result = create_bag_by_irods.AsyncResult(task_id)
     if result.ready():
         return HttpResponse(json.dumps({"status": result.get()}))
