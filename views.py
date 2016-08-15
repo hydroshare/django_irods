@@ -84,8 +84,8 @@ def download(request, path, rest_call=None, *args, **kwargs):
             task = create_bag_by_irods.apply_async((res_id, istorage),
                                                   countdown=3)
             if rest_call:
-                return HttpResponse({'bag_status': 'Not ready',
-                                         'task_id': task.task_id},
+                return HttpResponse(json.dumps({'bag_status': 'Not ready',
+                                         'task_id': task.task_id}),
                                         content_type="application/json")
 
             request.session['task_id'] = task.task_id
