@@ -20,8 +20,7 @@ from hs_core.hydroshare import check_resource_type
 from . import models as m
 from .icommands import Session, GLOBAL_SESSION
 
-@api_view(['GET'])
-def download(request, path, rest_call=None, *args, **kwargs):
+def download(request, path, rest_call=False, *args, **kwargs):
     idx = -1
     federated_path = ''
     if settings.HS_LOCAL_PROXY_USER_IN_FED_ZONE:
@@ -119,6 +118,11 @@ def download(request, path, rest_call=None, *args, **kwargs):
                            "Please download the large file via iRODS clients.</h1>"
         return response
 
+@api_view(['GET'])
+def rest_download(request, path, *args, **kwargs):
+    # need to have a separate view function just for REST API call
+    return download(request, path, rest_call=True, *args, **kwargs)
+
 
 def check_task_status(request, task_id=None, *args, **kwargs):
     '''
@@ -136,3 +140,8 @@ def check_task_status(request, task_id=None, *args, **kwargs):
         return HttpResponse(json.dumps({"status": result.get()}))
     else:
         return HttpResponse(json.dumps({"status": None}))
+
+@api_view(['GET'])
+def rest_check_task_status(request, task_id, *args, **kwargs):
+    # need to have a separate view function just for REST API call
+    return check_task_status(request, task_id, *args, **kwargs)
