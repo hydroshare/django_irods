@@ -10,6 +10,7 @@ from django_irods import icommands
 from django_irods.storage import IrodsStorage
 from django.conf import settings
 from django.http import HttpResponse, FileResponse, HttpResponseRedirect
+from django.core.exceptions import PermissionDenied
 
 from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
 from hs_core.tasks import create_bag_by_irods
@@ -64,10 +65,10 @@ def download(request, path, rest_call=False, *args, **kwargs):
         response = HttpResponse()
         content_msg = "You do not have permission to download this resource!"
         if rest_call:
-            response.content = content_msg
+            raise PermissionDenied(content_msg)
         else:
             response.content = "<h1>" + content_msg + "</h1>"
-        return response
+            return response
 
     if is_bag_download:
         # do on-demand bag creation
@@ -105,7 +106,6 @@ def download(request, path, rest_call=False, *args, **kwargs):
     mime_type = mimetypes.guess_type(path)
     if mime_type[0] is not None:
         mtype = mime_type[0]
-
     # retrieve file size to set up Content-Length header
     stdout = session.run("ils", None, "-l", path)[0].split()
     flen = int(stdout[3])
