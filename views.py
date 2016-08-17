@@ -62,7 +62,11 @@ def download(request, path, rest_call=False, *args, **kwargs):
                                    raises_exception=False)
     if not authorized:
         response = HttpResponse()
-        response.content = "<h1>You do not have permission to download this resource!</h1>"
+        content_msg = "You do not have permission to download this resource!"
+        if rest_call:
+            response.content = content_msg
+        else:
+            response.content = "<h1>" + content_msg + "</h1>"
         return response
 
     if is_bag_download:
@@ -113,9 +117,13 @@ def download(request, path, rest_call=False, *args, **kwargs):
         response['Content-Length'] = flen
         return response
     else:
+        content_msg = "File larger than 1GB cannot be downloaded directly via HTTP. " \
+                       "Please download the large file via iRODS clients."
         response = HttpResponse()
-        response.content = "<h1>File larger than 1GB cannot be downloaded directly via HTTP. " \
-                           "Please download the large file via iRODS clients.</h1>"
+        if rest_call:
+            response.content = content_msg
+        else:
+            response.content = "<h1>" + content_msg + "</h1>"
         return response
 
 @api_view(['GET'])
@@ -137,9 +145,11 @@ def check_task_status(request, task_id=None, *args, **kwargs):
         task_id = request.POST.get('task_id')
     result = create_bag_by_irods.AsyncResult(task_id)
     if result.ready():
-        return HttpResponse(json.dumps({"status": result.get()}))
+        return HttpResponse(json.dumps({"status": result.get()}),
+                            content_type="application/json")
     else:
-        return HttpResponse(json.dumps({"status": None}))
+        return HttpResponse(json.dumps({"status": None}),
+                            content_type="application/json")
 
 @api_view(['GET'])
 def rest_check_task_status(request, task_id, *args, **kwargs):
