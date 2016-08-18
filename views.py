@@ -21,6 +21,7 @@ from hs_core.hydroshare import check_resource_type
 from . import models as m
 from .icommands import Session, GLOBAL_SESSION
 
+
 def download(request, path, rest_call=False, *args, **kwargs):
     idx = -1
     federated_path = ''
@@ -43,7 +44,8 @@ def download(request, path, rest_call=False, *args, **kwargs):
         if 'environment' in kwargs:
             environment = int(kwargs['environment'])
             environment = m.RodsEnvironment.objects.get(pk=environment)
-            session = Session("/tmp/django_irods", settings.IRODS_ICOMMANDS_PATH, session_id=uuid4())
+            session = Session("/tmp/django_irods", settings.IRODS_ICOMMANDS_PATH,
+                              session_id=uuid4())
             session.create_environment(environment)
             session.run('iinit', None, environment.auth)
         elif getattr(settings, 'IRODS_GLOBAL_SESSION', False):
@@ -51,7 +53,8 @@ def download(request, path, rest_call=False, *args, **kwargs):
         elif icommands.ACTIVE_SESSION:
             session = icommands.ACTIVE_SESSION
         else:
-            raise KeyError('settings must have IRODS_GLOBAL_SESSION set if there is no environment object')
+            raise KeyError('settings must have IRODS_GLOBAL_SESSION set '
+                           'if there is no environment object')
 
     is_bag_download = False
     if split_path_strs[0] == 'bags':
@@ -59,7 +62,8 @@ def download(request, path, rest_call=False, *args, **kwargs):
         is_bag_download = True
     else:
         res_id = split_path_strs[0]
-    res, authorized, _ = authorize(request, res_id, needed_permission=ACTION_TO_AUTHORIZE.VIEW_RESOURCE,
+    res, authorized, _ = authorize(request, res_id,
+                                   needed_permission=ACTION_TO_AUTHORIZE.VIEW_RESOURCE,
                                    raises_exception=False)
     if not authorized:
         response = HttpResponse()
@@ -73,8 +77,9 @@ def download(request, path, rest_call=False, *args, **kwargs):
     if is_bag_download:
         # do on-demand bag creation
         bag_modified = "false"
-        # needs to check whether res_id collection exists before getting/setting AVU on it to accommodate the case
-        # where the very same resource gets deleted by another request when it is getting downloaded
+        # needs to check whether res_id collection exists before getting/setting AVU on it
+        # to accommodate the case where the very same resource gets deleted by another request
+        # when it is getting downloaded
         if federated_path:
             if federated_path.endswith('/'):
                 res_root = '{}{}'.format(federated_path, res_id)
@@ -85,12 +90,11 @@ def download(request, path, rest_call=False, *args, **kwargs):
         if istorage.exists(res_root):
             bag_modified = istorage.getAVU(res_root, 'bag_modified')
         if bag_modified == "true":
-            task = create_bag_by_irods.apply_async((res_id, istorage),
-                                                  countdown=3)
+            task = create_bag_by_irods.apply_async((res_id, istorage), countdown=3)
             if rest_call:
                 return HttpResponse(json.dumps({'bag_status': 'Not ready',
-                                         'task_id': task.task_id}),
-                                        content_type="application/json")
+                                                'task_id': task.task_id}),
+                                    content_type="application/json")
 
             request.session['task_id'] = task.task_id
             request.session['download_path'] = request.path
@@ -99,7 +103,8 @@ def download(request, path, rest_call=False, *args, **kwargs):
     # send signal for pre download file
     resource_cls = check_resource_type(res.resource_type)
     download_file_name = split_path_strs[-1]
-    pre_download_file.send(sender=resource_cls, resource=res, download_file_name=download_file_name)
+    pre_download_file.send(sender=resource_cls, resource=res,
+                           download_file_name=download_file_name)
 
     # obtain mime_type to set content_type
     mtype = 'application-x/octet-stream'
@@ -113,7 +118,8 @@ def download(request, path, rest_call=False, *args, **kwargs):
         options = ('-',)  # we're redirecting to stdout.
         proc = session.run_safe('iget', None, path, *options)
         response = FileResponse(proc.stdout, content_type=mtype)
-        response['Content-Disposition'] = 'attachment; filename="{name}"'.format(name=path.split('/')[-1])
+        response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
+                                                        name=path.split('/')[-1])
         response['Content-Length'] = flen
         return response
     else:
@@ -125,6 +131,7 @@ def download(request, path, rest_call=False, *args, **kwargs):
         else:
             response.content = "<h1>" + content_msg + "</h1>"
         return response
+
 
 @api_view(['GET'])
 def rest_download(request, path, *args, **kwargs):
@@ -150,6 +157,7 @@ def check_task_status(request, task_id=None, *args, **kwargs):
     else:
         return HttpResponse(json.dumps({"status": None}),
                             content_type="application/json")
+
 
 @api_view(['GET'])
 def rest_check_task_status(request, task_id, *args, **kwargs):
