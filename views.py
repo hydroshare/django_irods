@@ -22,7 +22,7 @@ from . import models as m
 from .icommands import Session, GLOBAL_SESSION
 
 
-def download(request, path, rest_call=False, *args, **kwargs):
+def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
     idx = -1
     federated_path = ''
     if settings.HS_LOCAL_PROXY_USER_IN_FED_ZONE:
@@ -90,15 +90,26 @@ def download(request, path, rest_call=False, *args, **kwargs):
         if istorage.exists(res_root):
             bag_modified = istorage.getAVU(res_root, 'bag_modified')
         if bag_modified == "true":
-            task = create_bag_by_irods.apply_async((res_id, istorage), countdown=3)
-            if rest_call:
-                return HttpResponse(json.dumps({'bag_status': 'Not ready',
-                                                'task_id': task.task_id}),
-                                    content_type="application/json")
+            if use_async:
+                task = create_bag_by_irods.apply_async((res_id, istorage), countdown=3)
+                if rest_call:
+                    return HttpResponse(json.dumps({'bag_status': 'Not ready',
+                                                    'task_id': task.task_id}),
+                                        content_type="application/json")
 
-            request.session['task_id'] = task.task_id
-            request.session['download_path'] = request.path
-            return HttpResponseRedirect(res.get_absolute_url())
+                request.session['task_id'] = task.task_id
+                request.session['download_path'] = request.path
+                return HttpResponseRedirect(res.get_absolute_url())
+            else:
+                ret_status = create_bag_by_irods(res_id, istorage)
+                if not ret_status:
+                    content_msg = "Bag cannot be created successfully. Check log for details."
+                    response = HttpResponse()
+                    if rest_call:
+                        response.content = content_msg
+                    else:
+                        response.content = "<h1>" + content_msg + "</h1>"
+                    return response
 
     # send signal for pre download file
     resource_cls = check_resource_type(res.resource_type)
