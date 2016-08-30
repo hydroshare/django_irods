@@ -66,7 +66,7 @@ def download(request, path, rest_call=False, *args, **kwargs):
                                    needed_permission=ACTION_TO_AUTHORIZE.VIEW_RESOURCE,
                                    raises_exception=False)
     if not authorized:
-        response = HttpResponse()
+        response = HttpResponse(status=401)
         content_msg = "You do not have permission to download this resource!"
         if rest_call:
             raise PermissionDenied(content_msg)
@@ -125,7 +125,7 @@ def download(request, path, rest_call=False, *args, **kwargs):
     else:
         content_msg = "File larger than 1GB cannot be downloaded directly via HTTP. " \
                        "Please download the large file via iRODS clients."
-        response = HttpResponse()
+        response = HttpResponse(status=503)
         if rest_call:
             response.content = content_msg
         else:
