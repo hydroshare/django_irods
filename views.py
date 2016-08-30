@@ -125,7 +125,7 @@ def download(request, path, rest_call=False, *args, **kwargs):
     else:
         content_msg = "File larger than 1GB cannot be downloaded directly via HTTP. " \
                        "Please download the large file via iRODS clients."
-        response = HttpResponse(status=503)
+        response = HttpResponse(status=403)
         if rest_call:
             response.content = content_msg
         else:
