@@ -8,30 +8,36 @@ from cStringIO import StringIO
 from django.conf import settings
 from collections import namedtuple
 
+
 class SessionException(Exception):
     def __init__(self, exitcode, stdout, stderr):
-        super(SessionException, self).__init__(self, "Error processing IRODS request: {exitcode}. stderr follows:\n\n{stderr}".format(
-            exitcode=exitcode,stderr=stderr
-        ))
+        super(SessionException, self).__init__(self,
+                                               "Error processing IRODS request: {exitcode}. "
+                                               "stderr follows:\n\n{stderr}".format(
+                                                   exitcode=exitcode, stderr=stderr))
         self.stdout = stdout
         self.stderr = stderr
         self.exitcode = exitcode
 
 IRodsEnv = namedtuple(
     'IRodsEnv',
-    ['pk','host','port','def_res','home_coll','cwd','username','zone','auth']
+    ['pk', 'host', 'port', 'def_res', 'home_coll', 'cwd', 'username', 'zone', 'auth',
+     'irods_default_hash_scheme']
 )
+
 
 class Session(object):
     """A set of methods to start, close and manage multiple
     iRODS client sessions at the same time, using icommands.
     """
 
-    def __init__(self, root=None, icommands_path=None, session_id = 'default_session'):
+    def __init__(self, root=None, icommands_path=None, session_id='default_session'):
         self.root = root or settings.IRODS_ROOT  # main directory to store session and log dirs
-        self.icommands_path = icommands_path or settings.IRODS_ICOMMANDS_PATH # where the icommand binaries are
+        self.icommands_path = icommands_path or settings.IRODS_ICOMMANDS_PATH  # where the icommand
+        # binaries are
         self.session_id = session_id
-        self.session_path = "{root}/{session_id}".format(root=self.root, session_id=self.session_id)
+        self.session_path = "{root}/{session_id}".format(root=self.root,
+                                                         session_id=self.session_id)
 
     def create_environment(self, myEnv=None):
         """Creates session files in temporary directory.
@@ -56,7 +62,8 @@ class Session(object):
                cwd=settings.IRODS_CWD,
                username=settings.IRODS_USERNAME,
                zone=settings.IRODS_ZONE,
-               auth=settings.IRODS_AUTH
+               auth=settings.IRODS_AUTH,
+               irods_default_hash_scheme='MD5'
             )
 
         # create irods_environment.json file
@@ -73,7 +80,8 @@ class Session(object):
                 "irods_home": "{home_coll}",
                 "irods_cwd": "{cwd}",
                 "irods_user_name": "{username}",
-                "irods_zone_name": "{zone}"
+                "irods_zone_name": "{zone}",
+                "irods_default_hash_scheme": "MD5"
             """).format(
                 host=myEnv.host,
                 port=myEnv.port,
@@ -84,7 +92,8 @@ class Session(object):
                 zone=myEnv.zone
             )
             env_post_str = "}"
-            env_file.write('{line1}{line2}{line3}'.format(line1=env_pre_str, line2=env_str, line3=env_post_str))
+            env_file.write('{line1}{line2}{line3}'.format(line1=env_pre_str, line2=env_str,
+                                                          line3=env_post_str))
 
         return myEnv
 
@@ -154,16 +163,16 @@ class Session(object):
         argList = [cmdStr]
         argList.extend(args)
 
-        stdin=None
+        stdin = None
         if data:
             stdin = StringIO(data)
 
         proc = subprocess.Popen(
             argList,
             stdin=subprocess.PIPE if stdin else None,
-            stdout = subprocess.PIPE,
-            stderr = subprocess.PIPE,
-            env = myenv
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=myenv
         )
         stdout, stderr = proc.communicate(input=data) if stdin else proc.communicate()
 
@@ -181,7 +190,7 @@ class Session(object):
         argList = [cmdStr]
         argList.extend(args)
 
-        stdin=None
+        stdin = None
         if data:
             print data
             stdin = StringIO(data)
@@ -189,9 +198,9 @@ class Session(object):
         proc = subprocess.Popen(
             argList,
             stdin=stdin,
-            stdout = subprocess.PIPE,
-            stderr = subprocess.PIPE,
-            env = myenv
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=myenv
         )
         return proc
 
@@ -208,9 +217,9 @@ class Session(object):
 
             return_codes.append(subprocess.Popen(
                 argList,
-                stdout = subprocess.PIPE,
-                stderr = subprocess.PIPE,
-                env = myenv
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=myenv
             ).communicate())
         return return_codes
 
@@ -232,10 +241,10 @@ class Session(object):
 
         proc = subprocess.Popen(
             argList,
-            stdin = None,
-            stdout = subprocess.PIPE,
-            stderr = subprocess.PIPE,
-            env = myenv
+            stdin=None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=myenv
         )
 
         stdout, stderr = proc.communicate()
