@@ -10,6 +10,7 @@ from django.core.urlresolvers import reverse
 from django_irods import icommands
 from icommands import Session, GLOBAL_SESSION, GLOBAL_ENVIRONMENT, SessionException, IRodsEnv
 
+
 @deconstructible
 class IrodsStorage(Storage):
     def __init__(self, option=None):
@@ -50,7 +51,8 @@ class IrodsStorage(Storage):
         self.session.run('iinit', None, self.environment.auth)
         icommands.ACTIVE_SESSION = self.session
 
-    #Set iRODS session to wwwHydroProxy for irods_storage input object for iRODS federated zone direct file operations
+    # Set iRODS session to wwwHydroProxy for irods_storage input object for iRODS federated
+    # zone direct file operations
     def set_fed_zone_session(self):
         if settings.REMOTE_USE_IRODS:
             self.set_user_session(username=settings.HS_WWW_IRODS_PROXY_USER,
@@ -61,11 +63,9 @@ class IrodsStorage(Storage):
                                   zone=settings.HS_WWW_IRODS_ZONE,
                                   sess_id='federated_session')
 
-
     def delete_user_session(self):
         if self.session != GLOBAL_SESSION and self.session.session_file_exists():
             self.session.delete_environment()
-
 
     def download(self, name):
         return self._open(name, mode='rb')
@@ -77,8 +77,10 @@ class IrodsStorage(Storage):
         """
         run iRODS bagit rule which generated bag-releated files without bundling
         :param rule_name: the iRODS rule name to run
-        :param input_path: input parameter to the rule that indicates the collection path to create bag for
-        :param input_resource: input parameter to the rule that indicates the default resource to store generated bag files
+        :param input_path: input parameter to the rule that indicates the collection path to
+        create bag for
+        :param input_resource: input parameter to the rule that indicates the default resource
+        to store generated bag files
         :return: None
         """
         # SessionException will be raised from run() in icommands.py
@@ -91,7 +93,7 @@ class IrodsStorage(Storage):
         :param out_name: the output zipped file name
         :return: None
         """
-        self.session.run("imkdir", None, '-p', out_name.rsplit('/',1)[0])
+        self.session.run("imkdir", None, '-p', out_name.rsplit('/', 1)[0])
         # SessionException will be raised from run() in icommands.py
         self.session.run("ibun", None, '-cDzip', '-f', out_name, in_name)
 
@@ -105,7 +107,8 @@ class IrodsStorage(Storage):
         name: the resource collection name to set AVU.
         attName: the attribute name to set
         attVal: the attribute value to set
-        attUnit: the attribute Unit to set, default is None, but can be set to indicate additional info
+        attUnit: the attribute Unit to set, default is None, but can be set to
+        indicate additional info
         """
 
         # SessionException will be raised from run() in icommands.py
@@ -124,13 +127,14 @@ class IrodsStorage(Storage):
         name: the resource collection name to set AVU.
         attName: the attribute name to set
         attVal: the attribute value to set
-        attUnit: the attribute Unit to set, default is None, but can be set to indicate additional info
+        attUnit: the attribute Unit to set, default is None, but can be set to
+        indicate additional info
         """
 
         # SessionException will be raised from run() in icommands.py
         stdout = self.session.run("imeta", None, 'ls', '-C', name, attName)[0].split("\n")
         ret_att = stdout[1].strip()
-        if ret_att == 'None': # queried attribute does not exist
+        if ret_att == 'None':  # queried attribute does not exist
             return None
         else:
             vals = stdout[2].split(":")
@@ -142,7 +146,8 @@ class IrodsStorage(Storage):
         :param
         src_name: the iRODS data-object or collection name to be copied from.
         dest_name: the iRODS data-object or collection name to be copied to
-        copyFiles() copied an irods data-object (file) or collection (directory) to another data-object or collection
+        copyFiles() copied an irods data-object (file) or collection (directory)
+        to another data-object or collection
         """
 
         if src_name and dest_name:
@@ -155,7 +160,8 @@ class IrodsStorage(Storage):
         :param
         src_name: the iRODS data-object or collection name to be moved from.
         dest_name: the iRODS data-object or collection name to be moved to
-        moveFile() moves/renames an irods data-object (file) or collection (directory) to another data-object or collection
+        moveFile() moves/renames an irods data-object (file) or collection
+        (directory) to another data-object or collection
         """
         if src_name and dest_name:
             splitstrs = dest_name.rsplit('/', 1)
@@ -190,7 +196,9 @@ class IrodsStorage(Storage):
                 if data_type_str:
                     self.session.run("iput", None, '-D', data_type_str, '-f', from_name, to_name)
                 else:
-                    self.session.run("iput", None, '-f', from_name, to_name) # IRODS 4.0.2, sometimes iput fails on the first try.  A second try seems to fix it.
+                    # IRODS 4.0.2, sometimes iput fails on the first try.
+                    # A second try seems to fix it.
+                    self.session.run("iput", None, '-f', from_name, to_name)
         return
 
     def _open(self, name, mode='rb'):
@@ -199,7 +207,7 @@ class IrodsStorage(Storage):
         return tmp
 
     def _save(self, name, content):
-        self.session.run("imkdir", None, '-p', name.rsplit('/',1)[0])
+        self.session.run("imkdir", None, '-p', name.rsplit('/', 1)[0])
         with NamedTemporaryFile(delete=False) as f:
             for chunk in content.chunks():
                 f.write(chunk)
@@ -208,7 +216,8 @@ class IrodsStorage(Storage):
             try:
                 self.session.run("iput", None, '-f', f.name, name)
             except:
-                self.session.run("iput", None, '-f', f.name, name) # IRODS 4.0.2, sometimes iput fails on the first try.  A second try seems to fix it.
+                # IRODS 4.0.2, sometimes iput fails on the first try. A second try seems to fix it.
+                self.session.run("iput", None, '-f', f.name, name)
             os.unlink(f.name)
         return name
 
@@ -224,7 +233,7 @@ class IrodsStorage(Storage):
 
     def listdir(self, path):
         stdout = self.session.run("ils", None, path)[0].split("\n")
-        listing = ( [], [] )
+        listing = ([], [])
         directory = stdout[0][0:-1]
         directory_prefix = "  C- " + directory + "/"
         for i in range(1, len(stdout)):
@@ -244,4 +253,3 @@ class IrodsStorage(Storage):
 
     def url(self, name):
         return reverse('django_irods.views.download', kwargs={'path': name})
-
