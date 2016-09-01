@@ -26,15 +26,16 @@ class IrodsStorage(Storage):
                          userid=0, sess_id=None):
         homedir = "/" + zone + "/home/" + username
         userEnv = IRodsEnv(
-               pk=userid,
-               host=host,
-               port=port,
-               def_res=def_res,
-               home_coll=homedir,
-               cwd=homedir,
-               username=username,
-               zone=zone,
-               auth=password
+            pk=userid,
+            host=host,
+            port=port,
+            def_res=def_res,
+            home_coll=homedir,
+            cwd=homedir,
+            username=username,
+            zone=zone,
+            auth=password,
+            irods_default_hash_scheme='MD5'
         )
         if sess_id is None:
             self.session = Session(session_id=uuid4())

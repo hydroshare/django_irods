@@ -79,7 +79,8 @@ class IRODSTask(Task):
                 cwd=settings.IRODS_CWD,
                 username=settings.IRODS_USERNAME,
                 zone=settings.IRODS_ZONE,
-                auth=settings.IRODS_AUTH
+                auth=settings.IRODS_AUTH,
+                irods_default_hash_scheme='MD5'
             )
         elif isinstance(environment, int):
             environment = m.RodsEnvironment.objects.get(pk=environment)

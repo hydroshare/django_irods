@@ -19,7 +19,8 @@ class SessionException(Exception):
 
 IRodsEnv = namedtuple(
     'IRodsEnv',
-    ['pk','host','port','def_res','home_coll','cwd','username','zone','auth']
+    ['pk', 'host', 'port', 'def_res', 'home_coll', 'cwd', 'username', 'zone', 'auth',
+     'irods_default_hash_scheme']
 )
 
 class Session(object):
@@ -56,7 +57,8 @@ class Session(object):
                cwd=settings.IRODS_CWD,
                username=settings.IRODS_USERNAME,
                zone=settings.IRODS_ZONE,
-               auth=settings.IRODS_AUTH
+               auth=settings.IRODS_AUTH,
+               irods_default_hash_scheme='MD5'
             )
 
         # create irods_environment.json file
@@ -73,7 +75,8 @@ class Session(object):
                 "irods_home": "{home_coll}",
                 "irods_cwd": "{cwd}",
                 "irods_user_name": "{username}",
-                "irods_zone_name": "{zone}"
+                "irods_zone_name": "{zone}",
+                "irods_default_hash_scheme": "MD5"
             """).format(
                 host=myEnv.host,
                 port=myEnv.port,
