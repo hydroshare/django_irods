@@ -15,7 +15,7 @@ from django.core.exceptions import PermissionDenied
 from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
 from hs_core.tasks import create_bag_by_irods
 from hs_core.hydroshare.resource import FILE_SIZE_LIMIT
-from hs_core.signals import pre_download_file
+from hs_core.signals import pre_download_file, pre_check_bag_flag
 from hs_core.hydroshare import check_resource_type
 
 from . import models as m
@@ -74,6 +74,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
             response.content = "<h1>" + content_msg + "</h1>"
             return response
 
+    resource_cls = check_resource_type(res.resource_type)
     if is_bag_download:
         # do on-demand bag creation
         bag_modified = "false"
@@ -87,6 +88,10 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
                 res_root = '{}/{}'.format(federated_path, res_id)
         else:
             res_root = res_id
+
+        # send signal for pre_check_bag_flag
+        pre_check_bag_flag.send(sender=resource_cls, resource=res)
+
         if istorage.exists(res_root):
             bag_modified = istorage.getAVU(res_root, 'bag_modified')
         if bag_modified == "true":
@@ -112,7 +117,6 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
                     return response
 
     # send signal for pre download file
-    resource_cls = check_resource_type(res.resource_type)
     download_file_name = split_path_strs[-1]
     pre_download_file.send(sender=resource_cls, resource=res,
                            download_file_name=download_file_name)
