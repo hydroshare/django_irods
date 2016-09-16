@@ -90,7 +90,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
             res_root = res_id
 
         # send signal for pre_check_bag_flag
-        pre_check_bag_flag.send(sender=resource_cls, resource=res, request_obj=request)
+        pre_check_bag_flag.send(sender=resource_cls, resource=res)
 
         if istorage.exists(res_root):
             bag_modified = istorage.getAVU(res_root, 'bag_modified')
