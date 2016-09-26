@@ -151,6 +151,9 @@ class IrodsStorage(Storage):
         """
 
         if src_name and dest_name:
+            splitstrs = dest_name.rsplit('/', 1)
+            if not self.exists(splitstrs[0]):
+                self.session.run("imkdir", None, '-p', splitstrs[0])
             self.session.run("icp", None, '-rf', src_name, dest_name)
         return
 
