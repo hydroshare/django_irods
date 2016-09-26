@@ -75,6 +75,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
             return response
 
     resource_cls = check_resource_type(res.resource_type)
+
     if is_bag_download:
         # do on-demand bag creation
         bag_modified = "false"
