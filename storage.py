@@ -151,6 +151,10 @@ class IrodsStorage(Storage):
         """
 
         if src_name and dest_name:
+            if '/' in dest_name:
+                splitstrs = dest_name.rsplit('/', 1)
+                if not self.exists(splitstrs[0]):
+                    self.session.run("imkdir", None, '-p', splitstrs[0])
             self.session.run("icp", None, '-rf', src_name, dest_name)
         return
 
@@ -164,9 +168,10 @@ class IrodsStorage(Storage):
         (directory) to another data-object or collection
         """
         if src_name and dest_name:
-            splitstrs = dest_name.rsplit('/', 1)
-            if not self.exists(splitstrs[0]):
-                self.session.run("imkdir", None, '-p', splitstrs[0])
+            if '/' in dest_name:
+                splitstrs = dest_name.rsplit('/', 1)
+                if not self.exists(splitstrs[0]):
+                    self.session.run("imkdir", None, '-p', splitstrs[0])
             self.session.run("imv", None, src_name, dest_name)
         return
 
