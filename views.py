@@ -23,39 +23,7 @@ from .icommands import Session, GLOBAL_SESSION
 
 
 def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
-    idx = -1
-    federated_path = ''
-    if settings.HS_LOCAL_PROXY_USER_IN_FED_ZONE:
-        idx = path.find(settings.HS_LOCAL_PROXY_USER_IN_FED_ZONE)
-    if idx > 0:
-        # the resource is stored in federated zone
-        istorage = IrodsStorage('federated')
-        session = icommands.ACTIVE_SESSION
-        s_idx = idx + len(settings.HS_LOCAL_PROXY_USER_IN_FED_ZONE)+1
-        rel_path = path[s_idx:]
-        split_path_strs = rel_path.split('/')
-        # prepend / as needed so that path for federated zone is absolute path
-        if not path.startswith('/'):
-            path = '/{}'.format(path)
-        federated_path = path[:s_idx]
-    else:
-        istorage = IrodsStorage()
-        split_path_strs = path.split('/')
-        if 'environment' in kwargs:
-            environment = int(kwargs['environment'])
-            environment = m.RodsEnvironment.objects.get(pk=environment)
-            session = Session("/tmp/django_irods", settings.IRODS_ICOMMANDS_PATH,
-                              session_id=uuid4())
-            session.create_environment(environment)
-            session.run('iinit', None, environment.auth)
-        elif getattr(settings, 'IRODS_GLOBAL_SESSION', False):
-            session = GLOBAL_SESSION
-        elif icommands.ACTIVE_SESSION:
-            session = icommands.ACTIVE_SESSION
-        else:
-            raise KeyError('settings must have IRODS_GLOBAL_SESSION set '
-                           'if there is no environment object')
-
+    split_path_strs = path.split('/')
     is_bag_download = False
     if split_path_strs[0] == 'bags':
         res_id = os.path.splitext(split_path_strs[1])[0]
@@ -74,6 +42,30 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
             response.content = "<h1>" + content_msg + "</h1>"
             return response
 
+    if res.resource_federation_path:
+        # the resource is stored in federated zone
+        istorage = IrodsStorage('federated')
+        federated_path = res.resource_federation_path
+        path = os.path.join(federated_path, path)
+        session = icommands.ACTIVE_SESSION
+    else:
+        istorage = IrodsStorage()
+        federated_path = ''
+        if 'environment' in kwargs:
+            environment = int(kwargs['environment'])
+            environment = m.RodsEnvironment.objects.get(pk=environment)
+            session = Session("/tmp/django_irods", settings.IRODS_ICOMMANDS_PATH,
+                              session_id=uuid4())
+            session.create_environment(environment)
+            session.run('iinit', None, environment.auth)
+        elif getattr(settings, 'IRODS_GLOBAL_SESSION', False):
+            session = GLOBAL_SESSION
+        elif icommands.ACTIVE_SESSION:
+            session = icommands.ACTIVE_SESSION
+        else:
+            raise KeyError('settings must have IRODS_GLOBAL_SESSION set '
+                           'if there is no environment object')
+
     resource_cls = check_resource_type(res.resource_type)
 
     if is_bag_download:
@@ -83,10 +75,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         # to accommodate the case where the very same resource gets deleted by another request
         # when it is getting downloaded
         if federated_path:
-            if federated_path.endswith('/'):
-                res_root = '{}{}'.format(federated_path, res_id)
-            else:
-                res_root = '{}/{}'.format(federated_path, res_id)
+            res_root = os.path.join(federated_path, res_id)
         else:
             res_root = res_id
 
