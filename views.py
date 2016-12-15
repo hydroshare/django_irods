@@ -1,4 +1,3 @@
-# Create your views here.
 from uuid import uuid4
 import os
 import json
@@ -82,7 +81,6 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
 
     if is_bag_download:
         # do on-demand bag creation
-        # bag_modified = "false"
         # needs to check whether res_id collection exists before getting/setting AVU on it
         # to accommodate the case where the very same resource gets deleted by another request
         # when it is getting downloaded
@@ -90,6 +88,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         # send signal for pre_check_bag_flag
         pre_check_bag_flag.send(sender=resource_cls, resource=res)
         if bag_modified == "true":
+            create_bag_files(res, fed_zone_home_path=res.resource_federation_path)
             if use_async:
                 task = create_bag_by_irods.apply_async((res_id, istorage), countdown=3)
                 if rest_call:
