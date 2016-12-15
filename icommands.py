@@ -19,6 +19,7 @@ class SessionException(Exception):
         self.stderr = stderr
         self.exitcode = exitcode
 
+
 IRodsEnv = namedtuple(
     'IRodsEnv',
     ['pk', 'host', 'port', 'def_res', 'home_coll', 'cwd', 'username', 'zone', 'auth',
@@ -253,6 +254,7 @@ class Session(object):
             raise SessionException(proc.returncode, stdout, stderr)
         else:
             return stdout, stderr
+
 
 if getattr(settings, 'IRODS_GLOBAL_SESSION', False) and getattr(settings, 'USE_IRODS', False):
     GLOBAL_SESSION = Session()
