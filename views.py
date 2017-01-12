@@ -88,7 +88,8 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         # send signal for pre_check_bag_flag
         pre_check_bag_flag.send(sender=resource_cls, resource=res)
         if bag_modified == "true":
-            create_bag_files(res, fed_zone_home_path=res.resource_federation_path)
+            if metadata_dirty == 'true':
+                create_bag_files(res, fed_zone_home_path=res.resource_federation_path)
             if use_async:
                 task = create_bag_by_irods.apply_async((res_id, istorage), countdown=3)
                 if rest_call:
@@ -110,7 +111,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
                         response.content = "<h1>" + content_msg + "</h1>"
                     return response
 
-    elif bag_modified == "true" and metadata_dirty == 'true':
+    elif metadata_dirty == 'true':
         if path.endswith("resourcemap.xml") or path.endswith('resourcemetadata.xml'):
             # we need to regenerate the metadata xml files
             create_bag_files(res, fed_zone_home_path=res.resource_federation_path)
