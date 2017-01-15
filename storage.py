@@ -258,3 +258,9 @@ class IrodsStorage(Storage):
 
     def url(self, name):
         return reverse('django_irods.views.download', kwargs={'path': name})
+
+    def get_available_name(self, name): 
+        """
+        Allow irods to replace existing files 
+        """
+        return name
