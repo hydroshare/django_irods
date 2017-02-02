@@ -91,7 +91,10 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
             if metadata_dirty == 'true':
                 create_bag_files(res, fed_zone_home_path=res.resource_federation_path)
             if use_async:
-                task = create_bag_by_irods.apply_async((res_id, istorage), countdown=3)
+                # task parameter has to be passed in as a tuple or list, hence (res_id,) is needed
+                # Note that since we are using JSON for task parameter serialization, no complex
+                # object can be passed as parameters to a celery task
+                task = create_bag_by_irods.apply_async((res_id,), countdown=3)
                 if rest_call:
                     return HttpResponse(json.dumps({'bag_status': 'Not ready',
                                                     'task_id': task.task_id}),
