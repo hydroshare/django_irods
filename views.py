@@ -122,7 +122,8 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
     # send signal for pre download file
     download_file_name = split_path_strs[-1]
     pre_download_file.send(sender=resource_cls, resource=res,
-                           download_file_name=download_file_name)
+                           download_file_name=download_file_name,
+                           request=request)
 
     # obtain mime_type to set content_type
     mtype = 'application-x/octet-stream'
