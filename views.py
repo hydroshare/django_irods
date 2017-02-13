@@ -104,7 +104,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
                 request.session['download_path'] = request.path
                 return HttpResponseRedirect(res.get_absolute_url())
             else:
-                ret_status = create_bag_by_irods(res_id, istorage)
+                ret_status = create_bag_by_irods(res_id)
                 if not ret_status:
                     content_msg = "Bag cannot be created successfully. Check log for details."
                     response = HttpResponse()
