@@ -1,4 +1,3 @@
-# Create your views here.
 from uuid import uuid4
 import os
 import json
@@ -17,6 +16,7 @@ from hs_core.tasks import create_bag_by_irods
 from hs_core.hydroshare.resource import FILE_SIZE_LIMIT
 from hs_core.signals import pre_download_file, pre_check_bag_flag
 from hs_core.hydroshare import check_resource_type
+from hs_core.hydroshare.hs_bagit import create_bag_files
 
 from . import models as m
 from .icommands import Session, GLOBAL_SESSION
@@ -68,25 +68,33 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
 
     resource_cls = check_resource_type(res.resource_type)
 
+    if federated_path:
+        res_root = os.path.join(federated_path, res_id)
+    else:
+        res_root = res_id
+
+    bag_modified = "false"
+    metadata_dirty = "false"
+    if istorage.exists(res_root):
+        bag_modified = istorage.getAVU(res_root, 'bag_modified')
+        metadata_dirty = istorage.getAVU(res_root, 'metadata_dirty')
+
     if is_bag_download:
         # do on-demand bag creation
-        bag_modified = "false"
         # needs to check whether res_id collection exists before getting/setting AVU on it
         # to accommodate the case where the very same resource gets deleted by another request
         # when it is getting downloaded
-        if federated_path:
-            res_root = os.path.join(federated_path, res_id)
-        else:
-            res_root = res_id
 
         # send signal for pre_check_bag_flag
         pre_check_bag_flag.send(sender=resource_cls, resource=res)
-
-        if istorage.exists(res_root):
-            bag_modified = istorage.getAVU(res_root, 'bag_modified')
         if bag_modified == "true":
+            if metadata_dirty == 'true':
+                create_bag_files(res)
             if use_async:
-                task = create_bag_by_irods.apply_async((res_id, istorage), countdown=3)
+                # task parameter has to be passed in as a tuple or list, hence (res_id,) is needed
+                # Note that since we are using JSON for task parameter serialization, no complex
+                # object can be passed as parameters to a celery task
+                task = create_bag_by_irods.apply_async((res_id,), countdown=3)
                 if rest_call:
                     return HttpResponse(json.dumps({'bag_status': 'Not ready',
                                                     'task_id': task.task_id}),
@@ -96,7 +104,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
                 request.session['download_path'] = request.path
                 return HttpResponseRedirect(res.get_absolute_url())
             else:
-                ret_status = create_bag_by_irods(res_id, istorage)
+                ret_status = create_bag_by_irods(res_id)
                 if not ret_status:
                     content_msg = "Bag cannot be created successfully. Check log for details."
                     response = HttpResponse()
@@ -106,10 +114,16 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
                         response.content = "<h1>" + content_msg + "</h1>"
                     return response
 
+    elif metadata_dirty == 'true':
+        if path.endswith("resourcemap.xml") or path.endswith('resourcemetadata.xml'):
+            # we need to regenerate the metadata xml files
+            create_bag_files(res)
+
     # send signal for pre download file
     download_file_name = split_path_strs[-1]
     pre_download_file.send(sender=resource_cls, resource=res,
-                           download_file_name=download_file_name)
+                           download_file_name=download_file_name,
+                           request=request)
 
     # obtain mime_type to set content_type
     mtype = 'application-x/octet-stream'
