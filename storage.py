@@ -6,6 +6,7 @@ from django.utils.deconstruct import deconstructible
 from django.conf import settings
 from django.core.files.storage import Storage
 from django.core.urlresolvers import reverse
+from django.core.exceptions import ValidationError
 
 from django_irods import icommands
 from icommands import Session, GLOBAL_SESSION, GLOBAL_ENVIRONMENT, SessionException, IRodsEnv
@@ -258,3 +259,11 @@ class IrodsStorage(Storage):
 
     def url(self, name):
         return reverse('django_irods.views.download', kwargs={'path': name})
+
+    def get_available_name(self, name):
+        """
+        Reject duplicate file names rather than renaming them.
+        """
+        if self.exists(name):
+            raise ValidationError(str.format("File {} already exists.", name))
+        return name

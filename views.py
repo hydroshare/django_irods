@@ -89,7 +89,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         pre_check_bag_flag.send(sender=resource_cls, resource=res)
         if bag_modified == "true":
             if metadata_dirty == 'true':
-                create_bag_files(res, fed_zone_home_path=res.resource_federation_path)
+                create_bag_files(res)
             if use_async:
                 # task parameter has to be passed in as a tuple or list, hence (res_id,) is needed
                 # Note that since we are using JSON for task parameter serialization, no complex
@@ -117,7 +117,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
     elif metadata_dirty == 'true':
         if path.endswith("resourcemap.xml") or path.endswith('resourcemetadata.xml'):
             # we need to regenerate the metadata xml files
-            create_bag_files(res, fed_zone_home_path=res.resource_federation_path)
+            create_bag_files(res)
 
     # send signal for pre download file
     download_file_name = split_path_strs[-1]
