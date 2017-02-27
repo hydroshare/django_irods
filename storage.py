@@ -17,6 +17,7 @@ class IrodsStorage(Storage):
         self.session = iRODSSession(
                             host=backend.get('HOST', 'localhost'),
                             port=backend.get('PORT', 1247),
+                            chunk_size=backend.get('CHUNK_SIZE', 8192),
                             user=backend['USER'],
                             password=backend['PASSWORD'],
                             zone=backend['ZONE'])

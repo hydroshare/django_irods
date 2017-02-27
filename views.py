@@ -12,8 +12,7 @@ def download(request, irods_backend_slug, path, *args, **kwargs):
    filename = [x for x in path.split('/') if x][-1] #ignore trailing /s
    path = '/{0}'.format(path)
    storage = IrodsStorage(irods_backend=irods_backend_slug)
-   chunk_size = 8192
-   response = StreamingHttpResponse(storage.open(path, 'r'), chunk_size)
+   response = StreamingHttpResponse(storage.open(path, 'r'), storage.chunk_size)
    response['Content-Length'] = storage.size(path)
    response['Content-Disposition'] = "attachment; filename=%s" % filename
    return response
