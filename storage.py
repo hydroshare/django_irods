@@ -3,9 +3,11 @@ from uuid import uuid4
 from django.conf import settings
 from django.core.files.storage import Storage
 from django.core.urlresolvers import reverse
+from django.utils.deconstruct import deconstructible
 
 from irods.session import iRODSSession
 
+@deconstructible
 class IrodsStorage(Storage):
     def __init__(self, irods_backend=None):
         if not irods_backend:
