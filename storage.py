@@ -1,11 +1,11 @@
-from uuid import uuid4
-
 from django.conf import settings
 from django.core.files.storage import Storage
 from django.core.urlresolvers import reverse
 from django.utils.deconstruct import deconstructible
 
 from irods.session import iRODSSession
+from irods.exception import DataObjectDoesNotExist
+
 
 @deconstructible
 class IrodsStorage(Storage):
@@ -17,21 +17,21 @@ class IrodsStorage(Storage):
         self.session = iRODSSession(
                             host=backend.get('HOST', 'localhost'),
                             port=backend.get('PORT', 1247),
-                            chunk_size=backend.get('CHUNK_SIZE', 8192),
                             user=backend['USER'],
                             password=backend['PASSWORD'],
                             zone=backend['ZONE'])
-        #self.base_collection = self.session.collections.get(backend['BASE_COLLECTION'])
+        # self.base_collection = self.session.collections.get(backend['BASE_COLLECTION'])
+        self.chunk_size = backend.get('CHUNK_SIZE', 524288)
 
     def path(self, name):
         return name
 
     def _open(self, name, mode='r'):
-	data_object = self.session.data_objects.get(self.path(name))
-        return data_object.open(mode)
+        data_object = self.session.data_objects.get(self.path(name))
+        return data_object.open(mode, buffer_size=self.chunk_size)
 
     def _save(self, name, content):
-	data_object = self.session.data_objects.get(self.path(name))[0]
+        data_object = self.session.data_objects.get(self.path(name))
         return data_object.close()
 
     def delete(self, name):
@@ -49,7 +49,7 @@ class IrodsStorage(Storage):
         return collection.subcollections, collection.data_objects
 
     def size(self, name):
-	data_object = self.session.data_objects.get(self.path(name))
+        data_object = self.session.data_objects.get(self.path(name))
         return data_object.size
 
     def url(self, name):
