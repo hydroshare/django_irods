@@ -1,18 +1,25 @@
-from uuid import uuid4
+import mimetypes
 
-from django_irods.storage import IrodsStorage
-from django.conf import settings
 from django.http import StreamingHttpResponse
 
-from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
-from hs_core.signals import pre_download_file, pre_check_bag_flag
+from django_irods.storage import IrodsStorage
+
+
+def chunker(stream, chunk_s):
+    while 1:
+        yield stream.read(chunk_s)
 
 
 def download(request, irods_backend_slug, path, *args, **kwargs):
-   filename = [x for x in path.split('/') if x][-1] #ignore trailing /s
-   path = '/{0}'.format(path)
-   storage = IrodsStorage(irods_backend=irods_backend_slug)
-   response = StreamingHttpResponse(storage.open(path, 'r'), storage.chunk_size)
-   response['Content-Length'] = storage.size(path)
-   response['Content-Disposition'] = "attachment; filename=%s" % filename
-   return response
+    # ignore trailing /s & add initial slash
+    filename = [x for x in path.split('/') if x][-1]
+    path = '/{0}'.format(path)
+
+    storage = IrodsStorage(irods_backend=irods_backend_slug)
+    stream = storage.open(path, "r")
+    response = StreamingHttpResponse(chunker(stream, storage.chunk_size))
+
+    response['Content-Disposition'] = "attachment; filename=%s" % filename
+    response['Content-Type'] = mimetypes.guess_type(filename)
+    response['Content-Length'] = storage.size(path)
+    return response
