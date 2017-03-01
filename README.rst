@@ -26,6 +26,7 @@ IRODS_BACKENDS = {
         "USER": "other_user",
         "PASSWORD": "other_pw",
         "ZONE": "irods_zone2",
+        "CHUNK_SIZE": 2048,
     }
 }
 ```
