@@ -87,8 +87,8 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
 
         # send signal for pre_check_bag_flag
         pre_check_bag_flag.send(sender=resource_cls, resource=res)
-        if bag_modified == "true":
-            if metadata_dirty == 'true':
+        if bag_modified is None or bag_modified.lower() == "true":
+            if metadata_dirty is None or metadata_dirty.lower() == 'true':
                 create_bag_files(res)
             if use_async:
                 # task parameter has to be passed in as a tuple or list, hence (res_id,) is needed
@@ -114,7 +114,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
                         response.content = "<h1>" + content_msg + "</h1>"
                     return response
 
-    elif metadata_dirty == 'true':
+    elif metadata_dirty is None or metadata_dirty.lower() == 'true':
         if path.endswith("resourcemap.xml") or path.endswith('resourcemetadata.xml'):
             # we need to regenerate the metadata xml files
             create_bag_files(res)
