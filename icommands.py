@@ -162,7 +162,8 @@ class Session(object):
 
         cmdStr = os.path.join(self.icommands_path, icommand)
         argList = [cmdStr]
-        argList.extend(args)
+        uargs = [x.encode('utf-8') for x in args]
+        argList.extend(uargs)
 
         stdin = None
         if data:
