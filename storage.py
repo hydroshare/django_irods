@@ -232,7 +232,6 @@ class IrodsStorage(Storage):
 
     def exists(self, name):
         try:
-            name = u'{file_name}'.format(file_name=name)
             stdout = self.session.run("ils", None, name)[0]
             return stdout != ""
         except SessionException:
