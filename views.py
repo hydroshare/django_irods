@@ -77,6 +77,20 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
     metadata_dirty = "false"
     if istorage.exists(res_root):
         bag_modified = istorage.getAVU(res_root, 'bag_modified')
+        # make sure if bag_modified is not set to true, we still recreate the bag if the
+        # bag file does not exist for some reason to resolve the error to download a nonexistent
+        # bag when bag_modified is false due to the flag being out-of-sync with the real bag status
+        if bag_modified is None or bag_modified.lower() == "false":
+            # check whether the bag file exists
+            bag_file_name = res_id + '.zip'
+            if res_root.startswith(res_id):
+                bag_full_path = os.path.join('bags', bag_file_name)
+            else:
+                bag_full_path = os.path.join(federated_path, 'bags', bag_file_name)
+            # set bag_modified to 'true' if the bag does not exist so that it can be recreated
+            # and the bag_modified AVU will be set correctly as well subsequently
+            if not istorage.exists(bag_full_path):
+                bag_modified = 'true'
         metadata_dirty = istorage.getAVU(res_root, 'metadata_dirty')
 
     if is_bag_download:
