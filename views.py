@@ -12,7 +12,7 @@ from django.http import HttpResponse, FileResponse, HttpResponseRedirect
 from django.core.exceptions import PermissionDenied
 
 from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
-from hs_core.tasks import create_bag_by_irods
+from hs_core.tasks import create_bag_by_irods, create_temp_zip
 from hs_core.hydroshare.resource import FILE_SIZE_LIMIT
 from hs_core.signals import pre_download_file, pre_check_bag_flag
 from hs_core.hydroshare import check_resource_type
@@ -25,9 +25,13 @@ from .icommands import Session, GLOBAL_SESSION
 def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
     split_path_strs = path.split('/')
     is_bag_download = False
+    is_zip_download = False
     if split_path_strs[0] == 'bags':
         res_id = os.path.splitext(split_path_strs[1])[0]
         is_bag_download = True
+    elif split_path_strs[0] == 'zips':
+        res_id = os.path.splitext(split_path_strs[1])[0]
+        is_zip_download = True
     else:
         res_id = split_path_strs[0]
     res, authorized, _ = authorize(request, res_id,
@@ -75,7 +79,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
 
     bag_modified = "false"
     metadata_dirty = "false"
-    if istorage.exists(res_root):
+    if istorage.exists(res_root) and not is_zip_download:
         bag_modified = istorage.getAVU(res_root, 'bag_modified')
         # make sure if bag_modified is not set to true, we still recreate the bag if the
         # bag file does not exist for some reason to resolve the error to download a nonexistent
@@ -93,6 +97,46 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
                 bag_modified = 'true'
         metadata_dirty = istorage.getAVU(res_root, 'metadata_dirty')
 
+    if is_zip_download:
+        #TODO precheck
+        input_path = path.split(res_id)[1]
+
+        output_path = create_temp_zip(res_id, input_path)
+        if not output_path:
+            content_msg = "Bag cannot be created successfully. Check log for details."
+            response = HttpResponse()
+            if rest_call:
+                response.content = content_msg
+            else:
+                response.content = "<h1>" + content_msg + "</h1>"
+            return response
+
+        path = output_path
+        '''
+        if use_async:
+            # task parameter has to be passed in as a tuple or list, hence (res_id,) is needed
+            # Note that since we are using JSON for task parameter serialization, no complex
+            # object can be passed as parameters to a celery task
+            task = create_bag_by_irods.apply_async((res_id,), countdown=3)
+            if rest_call:
+                return HttpResponse(json.dumps({'bag_status': 'Not ready',
+                                                'task_id': task.task_id}),
+                                    content_type="application/json")
+
+            request.session['task_id'] = task.task_id
+            request.session['download_path'] = request.path
+            return HttpResponseRedirect(res.get_absolute_url())
+        else:
+            ret_status = create_bag_by_irods(res_id)
+            if not ret_status:
+                content_msg = "Bag cannot be created successfully. Check log for details."
+                response = HttpResponse()
+                if rest_call:
+                    response.content = content_msg
+                else:
+                    response.content = "<h1>" + content_msg + "</h1>"
+                return response
+'''
     if is_bag_download:
         # do on-demand bag creation
         # needs to check whether res_id collection exists before getting/setting AVU on it
