@@ -97,46 +97,40 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
                 bag_modified = 'true'
         metadata_dirty = istorage.getAVU(res_root, 'metadata_dirty')
 
+
+
     if is_zip_download:
-        #TODO precheck
-        input_path = path.split(res_id)[1]
 
-        output_path = create_temp_zip(res_id, input_path)
-        if not output_path:
-            content_msg = "Bag cannot be created successfully. Check log for details."
-            response = HttpResponse()
-            if rest_call:
-                response.content = content_msg
-            else:
-                response.content = "<h1>" + content_msg + "</h1>"
-            return response
+        if(path.endswith(".zip")): # requesting existing zip file
+            path = 'zips/{res_id}/{path}'.format(res_id=res_id, path=path)
+        else: # requesting folder that needs to be zipped
+            #TODO precheck
+            input_path = path.split(res_id)[1]
+            output_path = 'zips/{res_id}/{path}.zip'.format(res_id=res_id, path=path)
 
-        path = output_path
-        '''
-        if use_async:
-            # task parameter has to be passed in as a tuple or list, hence (res_id,) is needed
-            # Note that since we are using JSON for task parameter serialization, no complex
-            # object can be passed as parameters to a celery task
-            task = create_bag_by_irods.apply_async((res_id,), countdown=3)
-            if rest_call:
-                return HttpResponse(json.dumps({'bag_status': 'Not ready',
-                                                'task_id': task.task_id}),
-                                    content_type="application/json")
+            if use_async:
+                task = create_temp_zip.apply_async((res_id, input_path, output_path), countdown=3)
+                if rest_call:
+                    return HttpResponse(json.dumps({'zip_status': 'Not ready',
+                                                    'task_id': task.task_id}),
+                                        content_type="application/json")
 
-            request.session['task_id'] = task.task_id
-            request.session['download_path'] = request.path
-            return HttpResponseRedirect(res.get_absolute_url())
-        else:
-            ret_status = create_bag_by_irods(res_id)
+                request.session['task_id'] = task.task_id
+                request.session['download_path'] = request.path + ".zip"
+                return HttpResponseRedirect(res.get_absolute_url())
+
+            ret_status = create_temp_zip(res_id, input_path, output_path)
             if not ret_status:
-                content_msg = "Bag cannot be created successfully. Check log for details."
+                content_msg = "Zip cannot be created successfully. Check log for details."
                 response = HttpResponse()
                 if rest_call:
                     response.content = content_msg
                 else:
                     response.content = "<h1>" + content_msg + "</h1>"
                 return response
-'''
+
+            path = output_path
+
     if is_bag_download:
         # do on-demand bag creation
         # needs to check whether res_id collection exists before getting/setting AVU on it
