@@ -108,9 +108,9 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
             random_hash_path = 'zips/{res_id}/{rand_folder}'.format(res_id=res_id, rand_folder=random_hash)
             output_path = '{random_hash_path}{path}.zip'.format(random_hash_path=random_hash_path, path=input_path)
 
-            delete_zip.apply_async((res_id, random_hash_path), countdown=(2 * 60))  # delete after 20 minutes
             if use_async:
                 task = create_temp_zip.apply_async((res_id, input_path, output_path), countdown=3)
+                delete_zip.apply_async((res_id, random_hash_path), countdown=(20 * 60))  # delete after 20 minutes
                 if rest_call:
                     return HttpResponse(json.dumps({'zip_status': 'Not ready',
                                                     'task_id': task.task_id}),
@@ -122,6 +122,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
                 return HttpResponseRedirect(res.get_absolute_url())
 
             ret_status = create_temp_zip(res_id, input_path, output_path)
+            delete_zip.apply_async((res_id, random_hash_path), countdown=(20 * 60))  # delete after 20 minutes
             if not ret_status:
                 content_msg = "Zip cannot be created successfully. Check log for details."
                 response = HttpResponse()
