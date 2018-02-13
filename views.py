@@ -2,6 +2,7 @@ from uuid import uuid4
 import os
 import json
 import mimetypes
+import random
 
 from rest_framework.decorators import api_view
 
@@ -12,7 +13,7 @@ from django.http import HttpResponse, FileResponse, HttpResponseRedirect
 from django.core.exceptions import PermissionDenied
 
 from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
-from hs_core.tasks import create_bag_by_irods, create_temp_zip
+from hs_core.tasks import create_bag_by_irods, create_temp_zip, delete_zip
 from hs_core.hydroshare.resource import FILE_SIZE_LIMIT
 from hs_core.signals import pre_download_file, pre_check_bag_flag
 from hs_core.hydroshare import check_resource_type
@@ -101,13 +102,13 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
 
     if is_zip_download:
 
-        if(path.endswith(".zip")): # requesting existing zip file
-            path = 'zips/{res_id}/{path}'.format(res_id=res_id, path=path)
-        else: # requesting folder that needs to be zipped
-            #TODO precheck
+        if not path.endswith(".zip"): # requesting folder that needs to be zipped
             input_path = path.split(res_id)[1]
-            output_path = 'zips/{res_id}/{path}.zip'.format(res_id=res_id, path=path)
+            random_hash = random.getrandbits(16)
+            random_hash_path = 'zips/{res_id}/{rand_folder}'.format(res_id=res_id, rand_folder=random_hash)
+            output_path = '{random_hash_path}{path}.zip'.format(random_hash_path=random_hash_path, path=input_path)
 
+            delete_zip.apply_async((res_id, random_hash_path), countdown=(2 * 60))  # delete after 20 minutes
             if use_async:
                 task = create_temp_zip.apply_async((res_id, input_path, output_path), countdown=3)
                 if rest_call:
@@ -115,8 +116,9 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
                                                     'task_id': task.task_id}),
                                         content_type="application/json")
 
+                download_path = request.path.split("zips")[0] + output_path
                 request.session['task_id'] = task.task_id
-                request.session['download_path'] = request.path + ".zip"
+                request.session['download_path'] = download_path
                 return HttpResponseRedirect(res.get_absolute_url())
 
             ret_status = create_temp_zip(res_id, input_path, output_path)
