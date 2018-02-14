@@ -111,12 +111,13 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
             if use_async:
                 task = create_temp_zip.apply_async((res_id, input_path, output_path), countdown=3)
                 delete_zip.apply_async((res_id, random_hash_path), countdown=(20 * 60))  # delete after 20 minutes
+                download_path = request.path.split("zips")[0] + output_path
                 if rest_call:
                     return HttpResponse(json.dumps({'zip_status': 'Not ready',
-                                                    'task_id': task.task_id}),
+                                                    'task_id': task.task_id,
+                                                    'download_path': download_path}),
                                         content_type="application/json")
 
-                download_path = request.path.split("zips")[0] + output_path
                 request.session['task_id'] = task.task_id
                 request.session['download_path'] = download_path
                 return HttpResponseRedirect(res.get_absolute_url())
