@@ -1,3 +1,4 @@
+import datetime
 import json
 import mimetypes
 import os
@@ -6,7 +7,7 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
-from django.http import HttpResponse, FileResponse, HttpResponseRedirect, HttpResponseBadRequest
+from django.http import HttpResponse, FileResponse, HttpResponseRedirect
 from rest_framework.decorators import api_view
 
 from django_irods import icommands
@@ -29,10 +30,15 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         res_id = os.path.splitext(split_path_strs[1])[0]
         is_bag_download = True
     elif split_path_strs[0] == 'zips':
-        res_id = os.path.splitext(split_path_strs[1])[0]
+        if path.endswith('.zip'):
+            res_id = os.path.splitext(split_path_strs[2])[0]
+        else:
+            res_id = os.path.splitext(split_path_strs[1])[0]
         is_zip_download = True
     else:
         res_id = split_path_strs[0]
+
+    # if the resource does not exist, authorized will be false
     res, authorized, _ = authorize(request, res_id,
                                    needed_permission=ACTION_TO_AUTHORIZE.VIEW_RESOURCE,
                                    raises_exception=False)
@@ -76,15 +82,15 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
     else:
         res_root = res_id
 
-    if not istorage.exists(res_root):
-        return HttpResponseBadRequest("ResourceId {res_id} does not exist".format(res_id=res_id));
-
     if is_zip_download:
 
         if not path.endswith(".zip"):  # requesting folder that needs to be zipped
             input_path = path.split(res_id)[1]
             random_hash = random.getrandbits(32)
-            random_hash_path = 'zips/{res_id}/{rand_folder}'.format(res_id=res_id, rand_folder=random_hash)
+
+            daily_date = datetime.datetime.today().strftime('%Y-%m-%d')
+            random_hash_path = 'zips/{daily_date}/{res_id}/{rand_folder}'.format(daily_date=daily_date, res_id=res_id,
+                                                                                 rand_folder=random_hash)
             output_path = '{random_hash_path}{path}.zip'.format(random_hash_path=random_hash_path, path=input_path)
 
             if use_async:
