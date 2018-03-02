@@ -1,23 +1,23 @@
-from uuid import uuid4
-import os
+import datetime
 import json
 import mimetypes
+import os
+import random
+from uuid import uuid4
 
+from django.conf import settings
+from django.core.exceptions import PermissionDenied
+from django.http import HttpResponse, FileResponse, HttpResponseRedirect
 from rest_framework.decorators import api_view
 
 from django_irods import icommands
 from django_irods.storage import IrodsStorage
-from django.conf import settings
-from django.http import HttpResponse, FileResponse, HttpResponseRedirect
-from django.core.exceptions import PermissionDenied
-
-from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
-from hs_core.tasks import create_bag_by_irods
-from hs_core.hydroshare.resource import FILE_SIZE_LIMIT
-from hs_core.signals import pre_download_file, pre_check_bag_flag
 from hs_core.hydroshare import check_resource_type
 from hs_core.hydroshare.hs_bagit import create_bag_files
-
+from hs_core.hydroshare.resource import FILE_SIZE_LIMIT
+from hs_core.signals import pre_download_file, pre_check_bag_flag
+from hs_core.tasks import create_bag_by_irods, create_temp_zip, delete_zip
+from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
 from . import models as m
 from .icommands import Session, GLOBAL_SESSION
 
@@ -25,11 +25,20 @@ from .icommands import Session, GLOBAL_SESSION
 def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
     split_path_strs = path.split('/')
     is_bag_download = False
+    is_zip_download = False
     if split_path_strs[0] == 'bags':
         res_id = os.path.splitext(split_path_strs[1])[0]
         is_bag_download = True
+    elif split_path_strs[0] == 'zips':
+        if path.endswith('.zip'):
+            res_id = os.path.splitext(split_path_strs[2])[0]
+        else:
+            res_id = os.path.splitext(split_path_strs[1])[0]
+        is_zip_download = True
     else:
         res_id = split_path_strs[0]
+
+    # if the resource does not exist, authorized will be false
     res, authorized, _ = authorize(request, res_id,
                                    needed_permission=ACTION_TO_AUTHORIZE.VIEW_RESOURCE,
                                    raises_exception=False)
@@ -73,32 +82,70 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
     else:
         res_root = res_id
 
-    bag_modified = "false"
-    metadata_dirty = "false"
-    if istorage.exists(res_root):
-        bag_modified = istorage.getAVU(res_root, 'bag_modified')
-        # make sure if bag_modified is not set to true, we still recreate the bag if the
-        # bag file does not exist for some reason to resolve the error to download a nonexistent
-        # bag when bag_modified is false due to the flag being out-of-sync with the real bag status
-        if bag_modified is None or bag_modified.lower() == "false":
-            # check whether the bag file exists
-            bag_file_name = res_id + '.zip'
-            if res_root.startswith(res_id):
-                bag_full_path = os.path.join('bags', bag_file_name)
-            else:
-                bag_full_path = os.path.join(federated_path, 'bags', bag_file_name)
-            # set bag_modified to 'true' if the bag does not exist so that it can be recreated
-            # and the bag_modified AVU will be set correctly as well subsequently
-            if not istorage.exists(bag_full_path):
-                bag_modified = 'true'
-        metadata_dirty = istorage.getAVU(res_root, 'metadata_dirty')
+    if is_zip_download:
+
+        if not path.endswith(".zip"):  # requesting folder that needs to be zipped
+            input_path = path.split(res_id)[1]
+            random_hash = random.getrandbits(32)
+
+            daily_date = datetime.datetime.today().strftime('%Y-%m-%d')
+            random_hash_path = 'zips/{daily_date}/{res_id}/{rand_folder}'.format(
+                daily_date=daily_date, res_id=res_id,
+                rand_folder=random_hash)
+            output_path = '{random_hash_path}{path}.zip'.format(random_hash_path=random_hash_path,
+                                                                path=input_path)
+
+            if use_async:
+                task = create_temp_zip.apply_async((res_id, input_path, output_path), countdown=3)
+                delete_zip.apply_async((random_hash_path, ),
+                                       countdown=(20 * 60))  # delete after 20 minutes
+                download_path = request.path.split("zips")[0] + output_path
+                if rest_call:
+                    return HttpResponse(json.dumps({'zip_status': 'Not ready',
+                                                    'task_id': task.task_id,
+                                                    'download_path': download_path}),
+                                        content_type="application/json")
+
+                request.session['task_id'] = task.task_id
+                request.session['download_path'] = download_path
+                return HttpResponseRedirect(res.get_absolute_url())
+
+            ret_status = create_temp_zip(res_id, input_path, output_path)
+            delete_zip.apply_async((random_hash_path, ),
+                                   countdown=(20 * 60))  # delete after 20 minutes
+            if not ret_status:
+                content_msg = "Zip cannot be created successfully. Check log for details."
+                response = HttpResponse()
+                if rest_call:
+                    response.content = content_msg
+                else:
+                    response.content = "<h1>" + content_msg + "</h1>"
+                return response
+
+            path = output_path
+
+    bag_modified = istorage.getAVU(res_root, 'bag_modified')
+    # make sure if bag_modified is not set to true, we still recreate the bag if the
+    # bag file does not exist for some reason to resolve the error to download a nonexistent
+    # bag when bag_modified is false due to the flag being out-of-sync with the real bag status
+    if bag_modified is None or bag_modified.lower() == "false":
+        # check whether the bag file exists
+        bag_file_name = res_id + '.zip'
+        if res_root.startswith(res_id):
+            bag_full_path = os.path.join('bags', bag_file_name)
+        else:
+            bag_full_path = os.path.join(federated_path, 'bags', bag_file_name)
+        # set bag_modified to 'true' if the bag does not exist so that it can be recreated
+        # and the bag_modified AVU will be set correctly as well subsequently
+        if not istorage.exists(bag_full_path):
+            bag_modified = 'true'
+    metadata_dirty = istorage.getAVU(res_root, 'metadata_dirty')
+    # do on-demand bag creation
+    # needs to check whether res_id collection exists before getting/setting AVU on it
+    # to accommodate the case where the very same resource gets deleted by another request
+    # when it is getting downloaded
 
     if is_bag_download:
-        # do on-demand bag creation
-        # needs to check whether res_id collection exists before getting/setting AVU on it
-        # to accommodate the case where the very same resource gets deleted by another request
-        # when it is getting downloaded
-
         # send signal for pre_check_bag_flag
         pre_check_bag_flag.send(sender=resource_cls, resource=res)
         if bag_modified is None or bag_modified.lower() == "true":
@@ -152,12 +199,12 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         proc = session.run_safe('iget', None, path, *options)
         response = FileResponse(proc.stdout, content_type=mtype)
         response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
-                                                        name=path.split('/')[-1])
+            name=path.split('/')[-1])
         response['Content-Length'] = flen
         return response
     else:
         content_msg = "File larger than 1GB cannot be downloaded directly via HTTP. " \
-                       "Please download the large file via iRODS clients."
+                      "Please download the large file via iRODS clients."
         response = HttpResponse(status=403)
         if rest_call:
             response.content = content_msg
