@@ -141,7 +141,7 @@ class IrodsStorage(Storage):
             vals = stdout[2].split(":")
             return vals[1].strip()
 
-    def copyFiles(self, src_name, dest_name, ires = None):
+    def copyFiles(self, src_name, dest_name, ires=None):
         """
         Parameters:
         :param
