@@ -83,10 +83,12 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         res_root = res_id
 
     if is_zip_download:
-
         if not path.endswith(".zip"):  # requesting folder that needs to be zipped
             input_path = path.split(res_id)[1]
             random_hash = random.getrandbits(32)
+            if res.resource_type == "CompositeResource":
+                aggregation_name = input_path[len('/data/contents/'):]
+                res.create_aggregation_xml_documents(aggregation_name=aggregation_name)
 
             daily_date = datetime.datetime.today().strftime('%Y-%m-%d')
             random_hash_path = 'zips/{daily_date}/{res_id}/{rand_folder}'.format(
