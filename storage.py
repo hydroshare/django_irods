@@ -141,7 +141,7 @@ class IrodsStorage(Storage):
             vals = stdout[2].split(":")
             return vals[1].strip()
 
-    def copyFiles(self, src_name, dest_name):
+    def copyFiles(self, src_name, dest_name, ires=None):
         """
         Parameters:
         :param
@@ -156,7 +156,10 @@ class IrodsStorage(Storage):
                 splitstrs = dest_name.rsplit('/', 1)
                 if not self.exists(splitstrs[0]):
                     self.session.run("imkdir", None, '-p', splitstrs[0])
-            self.session.run("icp", None, '-rf', src_name, dest_name)
+            if ires:
+                self.session.run("icp", None, '-rf', '-R', ires, src_name, dest_name)
+            else:
+                self.session.run("icp", None, '-rf', src_name, dest_name)
         return
 
     def moveFile(self, src_name, dest_name):
