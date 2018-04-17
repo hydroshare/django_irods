@@ -194,7 +194,30 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
     # retrieve file size to set up Content-Length header
     stdout = session.run("ils", None, "-l", path)[0].split()
     flen = int(stdout[3])
-    if flen <= FILE_SIZE_LIMIT:
+
+    # If this path is resource_federation_path, then the file is a local user file
+    userpath = '/' + os.path.join(
+        getattr(settings, 'HS_USER_IRODS_ZONE', 'hydroshareuserZone'),
+        'home',
+        getattr(settings, 'HS_LOCAL_PROXY_USER_IN_FED_ZONE', 'localHydroProxy'))
+
+    if settings.SENDFILE_ON and not res.is_federated:
+        # invoke X-Accel-Redirect on physical vault file in nginx
+        response = HttpResponse()
+        response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
+            name=path.split('/')[-1])
+        response['X-Accel-Redirect'] = '/'.join([settings.IRODS_DATA_URI, path])
+        return response
+
+    elif settings.SENDFILE_ON and res.resource_federation_path == userpath:
+        # invoke X-Accel-Redirect on physical vault file in nginx
+        response = HttpResponse()
+        response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
+            name=path.split('/')[-1])
+        response['X-Accel-Redirect'] = '/'.join([settings.IRODS_USER_URI, path])
+        return response
+
+    elif flen <= FILE_SIZE_LIMIT:
         options = ('-',)  # we're redirecting to stdout.
         proc = session.run_safe('iget', None, path, *options)
         response = FileResponse(proc.stdout, content_type=mtype)
@@ -202,6 +225,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
             name=path.split('/')[-1])
         response['Content-Length'] = flen
         return response
+
     else:
         content_msg = "File larger than 1GB cannot be downloaded directly via HTTP. " \
                       "Please download the large file via iRODS clients."
