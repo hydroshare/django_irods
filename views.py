@@ -210,6 +210,9 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         return response
 
     elif settings.SENDFILE_ON and res.resource_federation_path == userpath:
+        # by default, path is full user path
+        if path.startswith(userpath):
+            path = path[len(userpath):]
         # invoke X-Accel-Redirect on physical vault file in nginx
         response = HttpResponse()
         response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
