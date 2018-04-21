@@ -201,7 +201,9 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         'home',
         getattr(settings, 'HS_LOCAL_PROXY_USER_IN_FED_ZONE', 'localHydroProxy'))
 
-    if getattr(settings, 'SENDFILE_ON', False) and not res.is_federated:
+    # currently, the REST API doesn't support sendfile, so do not respond to REST with sendfile.
+
+    if not rest_call and getattr(settings, 'SENDFILE_ON', False) and not res.is_federated:
         # invoke X-Accel-Redirect on physical vault file in nginx
         response = HttpResponse()
         response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
@@ -210,7 +212,8 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
             getattr(settings, 'IRODS_DATA_URI', '/irods-data'), path])
         return response
 
-    elif getattr(settings, 'SENDFILE_ON', False) and res.resource_federation_path == userpath:
+    elif not rest_call and getattr(settings, 'SENDFILE_ON', False) and \
+            res.resource_federation_path == userpath:
         # by default, path is full user path; strip federation prefix
         if path.startswith(userpath):
             path = path[len(userpath):]
