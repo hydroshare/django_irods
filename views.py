@@ -201,23 +201,26 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         'home',
         getattr(settings, 'HS_LOCAL_PROXY_USER_IN_FED_ZONE', 'localHydroProxy'))
 
-    if settings.SENDFILE_ON and not res.is_federated:
+    if getattr(settings, 'SENDFILE_ON', False) and not res.is_federated:
         # invoke X-Accel-Redirect on physical vault file in nginx
         response = HttpResponse()
         response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
             name=path.split('/')[-1])
-        response['X-Accel-Redirect'] = '/'.join([settings.IRODS_DATA_URI, path])
+        response['X-Accel-Redirect'] = '/'.join([
+            getattr(settings, 'IRODS_DATA_URI', '/irods-data'), path])
         return response
 
-    elif settings.SENDFILE_ON and res.resource_federation_path == userpath:
-        # by default, path is full user path
+    elif getattr(settings, 'SENDFILE_ON', False) and res.resource_federation_path == userpath:
+        # by default, path is full user path; strip federation prefix
         if path.startswith(userpath):
             path = path[len(userpath):]
         # invoke X-Accel-Redirect on physical vault file in nginx
         response = HttpResponse()
         response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
             name=path.split('/')[-1])
-        response['X-Accel-Redirect'] = '/'.join([settings.IRODS_USER_URI, path])
+
+        response['X-Accel-Redirect'] = '/'.join([
+            getattr(settings, 'IRODS_USER_URI', '/irods-user'), path])
         return response
 
     elif flen <= FILE_SIZE_LIMIT:
