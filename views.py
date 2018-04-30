@@ -20,6 +20,7 @@ from hs_core.tasks import create_bag_by_irods, create_temp_zip, delete_zip
 from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
 from . import models as m
 from .icommands import Session, GLOBAL_SESSION
+import logging
 
 
 def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
@@ -38,7 +39,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
     else:
         res_id = split_path_strs[0]
 
-    # if the resource does not exist, authorized will be false
+    # if the resource does not exist in django, authorized will be false
     res, authorized, _ = authorize(request, res_id,
                                    needed_permission=ACTION_TO_AUTHORIZE.VIEW_RESOURCE,
                                    raises_exception=False)
@@ -58,6 +59,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         path = os.path.join(federated_path, path)
         session = icommands.ACTIVE_SESSION
     else:
+        # TODO: From Alva: I do not understand the use case for changing the environment.
         istorage = IrodsStorage()
         federated_path = ''
         if 'environment' in kwargs:
@@ -201,33 +203,42 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         'home',
         getattr(settings, 'HS_LOCAL_PROXY_USER_IN_FED_ZONE', 'localHydroProxy'))
 
-    # currently, the REST API doesn't support sendfile, so do not respond to REST with sendfile.
+    if getattr(settings, 'SENDFILE_ON', False):
+        # # stop NGINX targets that are non-existent from hanging forever.
+        # if not istorage.exists(path):
+        #     content_msg = "file path {} does not exist in iRODS".format(path)
+        #     response = HttpResponse(status=404)
+        #     if rest_call:
+        #         response.content = content_msg
+        #     else:
+        #         response.content = "<h1>" + content_msg + "</h1>"
+        #     return response
 
-    if not rest_call and getattr(settings, 'SENDFILE_ON', False) and not res.is_federated:
-        # invoke X-Accel-Redirect on physical vault file in nginx
-        response = HttpResponse()
-        response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
-            name=path.split('/')[-1])
-        response['X-Accel-Redirect'] = '/'.join([
-            getattr(settings, 'IRODS_DATA_URI', '/irods-data'), path])
-        return response
+        if not res.is_federated:
+            # invoke X-Accel-Redirect on physical vault file in nginx
+            response = HttpResponse()
+            response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
+                name=path.split('/')[-1])
+            response['X-Accel-Redirect'] = '/'.join([
+                getattr(settings, 'IRODS_DATA_URI', '/irods-data'), path])
+            return response
 
-    elif not rest_call and getattr(settings, 'SENDFILE_ON', False) and \
-            res.resource_federation_path == userpath:
-        # by default, path is full user path; strip federation prefix
-        if path.startswith(userpath):
-            path = path[len(userpath):]
-        # invoke X-Accel-Redirect on physical vault file in nginx
-        response = HttpResponse()
-        response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
-            name=path.split('/')[-1])
+        elif res.resource_federation_path == userpath:
+            # by default, path is full user path; strip federation prefix
+            if path.startswith(userpath):
+                path = path[len(userpath)+1:]
+            # invoke X-Accel-Redirect on physical vault file in nginx
+            response = HttpResponse()
+            response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
+                name=path.split('/')[-1])
+            response['X-Accel-Redirect'] = os.path.join(
+                getattr(settings, 'IRODS_USER_URI', '/irods-user'), path)
+            return response
 
-        response['X-Accel-Redirect'] = '/'.join([
-            getattr(settings, 'IRODS_USER_URI', '/irods-user'), path])
-        return response
-
-    elif flen <= FILE_SIZE_LIMIT:
+    # if we get here, none of the above conditions are true
+    if flen <= FILE_SIZE_LIMIT:
         options = ('-',)  # we're redirecting to stdout.
+        # this unusual way of calling works for federated or local resources
         proc = session.run_safe('iget', None, path, *options)
         response = FileResponse(proc.stdout, content_type=mtype)
         response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
