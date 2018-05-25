@@ -20,7 +20,6 @@ from hs_core.tasks import create_bag_by_irods, create_temp_zip, delete_zip
 from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
 from . import models as m
 from .icommands import Session, GLOBAL_SESSION
-import logging
 
 
 def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
@@ -204,33 +203,52 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         getattr(settings, 'HS_LOCAL_PROXY_USER_IN_FED_ZONE', 'localHydroProxy'))
 
     if getattr(settings, 'SENDFILE_ON', False):
-        # # stop NGINX targets that are non-existent from hanging forever.
-        # if not istorage.exists(path):
-        #     content_msg = "file path {} does not exist in iRODS".format(path)
-        #     response = HttpResponse(status=404)
-        #     if rest_call:
-        #         response.content = content_msg
-        #     else:
-        #         response.content = "<h1>" + content_msg + "</h1>"
-        #     return response
+
+        # The NGINX sendfile abstraction is invoked as follows:
+        # 1. The request to download a file enters this routine via the /rest_download or /download
+        #    url in ./urls.py. It is redirected here from Django. The URI contains either the
+        #    unqualified resource path or the federated resource path, depending upon whether
+        #    the request is local or federated.
+        # 2. This deals with unfederated resources by redirecting them to the uri
+        #    /irods-data/{resource-id}/... on nginx. This URI is configured to read the file
+        #    directly from the iRODS vault via NFS, and does not work for direct access to the
+        #    vault due to the 'internal;' declaration in NGINX.
+        # 3. This deals with federated resources by reading their path, matching local vaults, and
+        #    redirecting to URIs that are in turn mapped to read from appropriate iRODS vaults. At
+        #    present, the only one of these is /irods-user, which handles files whose federation
+        #    path is stored in the variable 'userpath'.
+        # 4. If there is no vault available for the resource, the file is transferred without
+        #    NGINX, exactly as it was transferred previously.
+
+        # stop NGINX targets that are non-existent from hanging forever.
+        if not istorage.exists(path):
+            content_msg = "file path {} does not exist in iRODS".format(path)
+            response = HttpResponse(status=404)
+            if rest_call:
+                response.content = content_msg
+            else:
+                response.content = "<h1>" + content_msg + "</h1>"
+            return response
 
         if not res.is_federated:
             # invoke X-Accel-Redirect on physical vault file in nginx
-            response = HttpResponse()
+            response = HttpResponse(content_type=mtype)
             response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
                 name=path.split('/')[-1])
+            response['Content-Length'] = flen
             response['X-Accel-Redirect'] = '/'.join([
                 getattr(settings, 'IRODS_DATA_URI', '/irods-data'), path])
             return response
 
-        elif res.resource_federation_path == userpath:
+        elif res.resource_federation_path == userpath:  # this guarantees a "user" resource
             # by default, path is full user path; strip federation prefix
             if path.startswith(userpath):
                 path = path[len(userpath)+1:]
             # invoke X-Accel-Redirect on physical vault file in nginx
-            response = HttpResponse()
+            response = HttpResponse(content_type=mtype)
             response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
                 name=path.split('/')[-1])
+            response['Content-Length'] = flen
             response['X-Accel-Redirect'] = os.path.join(
                 getattr(settings, 'IRODS_USER_URI', '/irods-user'), path)
             return response
