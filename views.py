@@ -20,12 +20,14 @@ from hs_core.tasks import create_bag_by_irods, create_temp_zip, delete_zip
 from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
 from . import models as m
 from .icommands import Session, GLOBAL_SESSION
+from hs_core.models import ResourceFile
 
 
 def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
     split_path_strs = path.split('/')
     is_bag_download = False
     is_zip_download = False
+    is_sf_agg_file = False
     if split_path_strs[0] == 'bags':
         res_id = os.path.splitext(split_path_strs[1])[0]
         is_bag_download = True
@@ -50,6 +52,12 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         else:
             response.content = "<h1>" + content_msg + "</h1>"
             return response
+
+    if res.resource_type == "CompositeResource" and not path.endswith(".zip"):
+        for f in ResourceFile.objects.filter(object_id=res.id):
+            if path == f.storage_path:
+                if f.has_logical_file and f.logical_file.is_single_file_aggregation:
+                    is_sf_agg_file = True
 
     if res.resource_federation_path:
         # the resource is stored in federated zone
@@ -82,14 +90,10 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
     else:
         res_root = res_id
 
-    if is_zip_download:
+    if is_zip_download or is_sf_agg_file:
         if not path.endswith(".zip"):  # requesting folder that needs to be zipped
             input_path = path.split(res_id)[1]
             random_hash = random.getrandbits(32)
-            if res.resource_type == "CompositeResource":
-                aggregation_name = input_path[len('/data/contents/'):]
-                res.create_aggregation_xml_documents(aggregation_name=aggregation_name)
-
             daily_date = datetime.datetime.today().strftime('%Y-%m-%d')
             random_hash_path = 'zips/{daily_date}/{res_id}/{rand_folder}'.format(
                 daily_date=daily_date, res_id=res_id,
@@ -97,22 +101,29 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
             output_path = '{random_hash_path}{path}.zip'.format(random_hash_path=random_hash_path,
                                                                 path=input_path)
 
+            if res.resource_type == "CompositeResource":
+                aggregation_name = input_path[len('/data/contents/'):]
+                res.create_aggregation_xml_documents(aggregation_name=aggregation_name)
+
             if use_async:
-                task = create_temp_zip.apply_async((res_id, input_path, output_path), countdown=3)
+                task = create_temp_zip.apply_async((res_id, input_path, output_path,
+                                                    is_sf_agg_file), countdown=3)
                 delete_zip.apply_async((random_hash_path, ),
                                        countdown=(20 * 60))  # delete after 20 minutes
-                download_path = request.path.split("zips")[0] + output_path
+                if is_sf_agg_file:
+                    download_path = request.path.split(res_id)[0] + output_path
+                else:
+                    download_path = request.path.split("zips")[0] + output_path
                 if rest_call:
                     return HttpResponse(json.dumps({'zip_status': 'Not ready',
                                                     'task_id': task.task_id,
                                                     'download_path': download_path}),
                                         content_type="application/json")
-
                 request.session['task_id'] = task.task_id
                 request.session['download_path'] = download_path
                 return HttpResponseRedirect(res.get_absolute_url())
 
-            ret_status = create_temp_zip(res_id, input_path, output_path)
+            ret_status = create_temp_zip(res_id, input_path, output_path, is_sf_agg_file)
             delete_zip.apply_async((random_hash_path, ),
                                    countdown=(20 * 60))  # delete after 20 minutes
             if not ret_status:
