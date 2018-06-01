@@ -202,7 +202,8 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         'home',
         getattr(settings, 'HS_LOCAL_PROXY_USER_IN_FED_ZONE', 'localHydroProxy'))
 
-    if getattr(settings, 'SENDFILE_ON', False):
+    # sendfile cannot be tested when running unit tests, which are django-centric
+    if getattr(settings, 'SENDFILE_ON', False) and not getattr(settings, 'TESTING', False):
 
         # The NGINX sendfile abstraction is invoked as follows:
         # 1. The request to download a file enters this routine via the /rest_download or /download
