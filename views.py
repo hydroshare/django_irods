@@ -264,7 +264,6 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         elif res.resource_federation_path == userpath:  # this guarantees a "user" resource
             # invoke X-Accel-Redirect on physical vault file in nginx
             # if path is full user path; strip federation prefix
-            oldpath = path
             if path.startswith(userpath):
                 path = path[len(userpath)+1:]
             # invoke X-Accel-Redirect on physical vault file in nginx
