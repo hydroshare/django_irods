@@ -67,6 +67,8 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         session = icommands.ACTIVE_SESSION
     else:
         # TODO: From Alva: I do not understand the use case for changing the environment.
+        # TODO: This seems an enormous potential vulnerability, as arguments are
+        # TODO: passed from the URI directly to IRODS without verification.
         istorage = IrodsStorage()
         federated_path = ''
         if 'environment' in kwargs:
@@ -153,6 +155,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         # and the bag_modified AVU will be set correctly as well subsequently
         if not istorage.exists(bag_full_path):
             bag_modified = 'true'
+
     metadata_dirty = istorage.getAVU(res_root, 'metadata_dirty')
     # do on-demand bag creation
     # needs to check whether res_id collection exists before getting/setting AVU on it
@@ -215,8 +218,12 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
         'home',
         getattr(settings, 'HS_LOCAL_PROXY_USER_IN_FED_ZONE', 'localHydroProxy'))
 
-    # sendfile cannot be tested when running unit tests, which are django-centric
-    if getattr(settings, 'SENDFILE_ON', False) and not getattr(settings, 'TESTING', False):
+    # Allow reverse proxy if request was forwarded by nginx
+    # (HTTP_X_DJANGO_REVERSE_PROXY is 'true')
+    # and reverse proxy is possible according to configuration.
+
+    if getattr(settings, 'SENDFILE_ON', False) and \
+       'HTTP_X_DJANGO_REVERSE_PROXY' in request.META:
 
         # The NGINX sendfile abstraction is invoked as follows:
         # 1. The request to download a file enters this routine via the /rest_download or /download
@@ -255,7 +262,8 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
             return response
 
         elif res.resource_federation_path == userpath:  # this guarantees a "user" resource
-            # by default, path is full user path; strip federation prefix
+            # invoke X-Accel-Redirect on physical vault file in nginx
+            # if path is full user path; strip federation prefix
             if path.startswith(userpath):
                 path = path[len(userpath)+1:]
             # invoke X-Accel-Redirect on physical vault file in nginx
