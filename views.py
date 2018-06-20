@@ -22,8 +22,8 @@ from . import models as m
 from .icommands import Session, GLOBAL_SESSION
 from hs_core.models import ResourceFile
 
-
-def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
+def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=True,
+             *args, **kwargs):
     split_path_strs = path.split('/')
     is_bag_download = False
     is_zip_download = False
@@ -222,7 +222,7 @@ def download(request, path, rest_call=False, use_async=True, *args, **kwargs):
     # (HTTP_X_DJANGO_REVERSE_PROXY is 'true')
     # and reverse proxy is possible according to configuration.
 
-    if getattr(settings, 'SENDFILE_ON', False) and \
+    if use_reverse_proxy and getattr(settings, 'SENDFILE_ON', False) and \
        'HTTP_X_DJANGO_REVERSE_PROXY' in request.META:
 
         # The NGINX sendfile abstraction is invoked as follows:
