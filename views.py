@@ -22,6 +22,7 @@ from . import models as m
 from .icommands import Session, GLOBAL_SESSION
 from hs_core.models import ResourceFile
 
+
 def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=True,
              *args, **kwargs):
     split_path_strs = path.split('/')
