@@ -21,10 +21,15 @@ from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
 from . import models as m
 from .icommands import Session, GLOBAL_SESSION
 from hs_core.models import ResourceFile
+import logging
 
 
 def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=True,
              *args, **kwargs):
+    logger = logging.getLogger('hydroshare')
+
+    # logger.debug("processing request {} rest_call={} use_async={}"
+    #              .format(request.path, str(rest_call), str(use_async)))
     split_path_strs = path.split('/')
     is_bag_download = False
     is_zip_download = False
@@ -79,6 +84,7 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
                               session_id=uuid4())
             session.create_environment(environment)
             session.run('iinit', None, environment.auth)
+            logger.debug("invoking irods environment from online information")
         elif getattr(settings, 'IRODS_GLOBAL_SESSION', False):
             session = GLOBAL_SESSION
         elif icommands.ACTIVE_SESSION:
@@ -226,6 +232,7 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
     if use_reverse_proxy and getattr(settings, 'SENDFILE_ON', False) and \
        'HTTP_X_DJANGO_REVERSE_PROXY' in request.META:
 
+        logger.debug("invoking reverse proxy sendfile on {}".format(path))
         # The NGINX sendfile abstraction is invoked as follows:
         # 1. The request to download a file enters this routine via the /rest_download or /download
         #    url in ./urls.py. It is redirected here from Django. The URI contains either the
@@ -244,6 +251,7 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
 
         # stop NGINX targets that are non-existent from hanging forever.
         if not istorage.exists(path):
+            logger.debug("sendfile path {} does not exist in iRODS".format(path))
             content_msg = "file path {} does not exist in iRODS".format(path)
             response = HttpResponse(status=404)
             if rest_call:
@@ -253,6 +261,7 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
             return response
 
         if not res.is_federated:
+            logger.debug("invoking non-federated sendfile on {}".format(path))
             # invoke X-Accel-Redirect on physical vault file in nginx
             response = HttpResponse(content_type=mtype)
             response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
@@ -260,9 +269,12 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
             response['Content-Length'] = flen
             response['X-Accel-Redirect'] = '/'.join([
                 getattr(settings, 'IRODS_DATA_URI', '/irods-data'), path])
+            logger.debug("reverse proxy redirection path is {}"
+                         .format(response['X-Accel-Redirect']))
             return response
 
         elif res.resource_federation_path == userpath:  # this guarantees a "user" resource
+            logger.debug("invoking user sendfile on {}".format(path))
             # invoke X-Accel-Redirect on physical vault file in nginx
             # if path is full user path; strip federation prefix
             if path.startswith(userpath):
@@ -274,10 +286,13 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
             response['Content-Length'] = flen
             response['X-Accel-Redirect'] = os.path.join(
                 getattr(settings, 'IRODS_USER_URI', '/irods-user'), path)
+            logger.debug("reverse proxy redirection path is {}"
+                         .format(response['X-Accel-Redirect']))
             return response
 
     # if we get here, none of the above conditions are true
     if flen <= FILE_SIZE_LIMIT:
+        logger.debug("responding via regular proxy to {}".format(path))
         options = ('-',)  # we're redirecting to stdout.
         # this unusual way of calling works for federated or local resources
         proc = session.run_safe('iget', None, path, *options)
@@ -288,6 +303,7 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
         return response
 
     else:
+        logger.debug("file {} too large for normal response".format(path))
         content_msg = "File larger than 1GB cannot be downloaded directly via HTTP. " \
                       "Please download the large file via iRODS clients."
         response = HttpResponse(status=403)
