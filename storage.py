@@ -98,6 +98,31 @@ class IrodsStorage(Storage):
         # SessionException will be raised from run() in icommands.py
         self.session.run("ibun", None, '-cDzip', '-f', out_name, in_name)
 
+    def unzip(self, zip_file_path):
+        """
+        run iRODS ibun command to unzip files
+        :param zip_file_path: path of the zipped file to be unzipped
+        :return: the folder files were unzipped to
+        """
+
+        abs_path = os.path.dirname(zip_file_path)
+        unzipped_folder = os.path.splitext(os.path.basename(zip_file_path))[0]
+        unzipped_folder = self.__get_nonexistant_path(os.path.join(abs_path, unzipped_folder))
+
+        # SessionException will be raised from run() in icommands.py
+        self.session.run("ibun", None, '-xDzip', zip_file_path, unzipped_folder)
+        return unzipped_folder
+
+    def __get_nonexistant_path(self, path):
+        if not self.exists(path):
+            return path
+        i = 1
+        new_path = "{}-{}".format(path, i)
+        while self.exists(new_path):
+            i += 1
+            new_path = "{}-{}".format(path, i)
+        return new_path
+
     def setAVU(self, name, attName, attVal, attUnit=None):
         """
         set AVU on resource collection - this is used for on-demand bagging by indicating
