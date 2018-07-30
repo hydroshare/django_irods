@@ -261,9 +261,9 @@ class IrodsStorage(Storage):
         return int(stdout[3])
 
     def url(self, name):
-        return reverse('django_irods.views.download', kwargs={'path': name})
+        return reverse('django_irods_download', kwargs={'path': name})
 
-    def get_available_name(self, name):
+    def get_available_name(self, name, max_length=None):
         """
         Reject duplicate file names rather than renaming them.
         """
