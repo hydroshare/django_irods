@@ -22,9 +22,12 @@ from . import models as m
 from .icommands import Session, GLOBAL_SESSION
 from hs_core.models import ResourceFile
 
+import logging
+logger = logging.getLogger(__name__) 
 
 def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=True,
              *args, **kwargs):
+    logger.debug("request path is {}".format(path))
     split_path_strs = path.split('/')
     is_bag_download = False
     is_zip_download = False
@@ -33,6 +36,7 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
         res_id = os.path.splitext(split_path_strs[1])[0]
         is_bag_download = True
     elif split_path_strs[0] == 'zips':
+        # TODO: Alva: How can the resource ID shift places? 
         if path.endswith('.zip'):
             res_id = os.path.splitext(split_path_strs[2])[0]
         else:
@@ -40,6 +44,8 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
         is_zip_download = True
     else:
         res_id = split_path_strs[0]
+
+    logger.debug("resource id is {}".format(res_id))
 
     # if the resource does not exist in django, authorized will be false
     res, authorized, _ = authorize(request, res_id,
@@ -54,7 +60,9 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
             response.content = "<h1>" + content_msg + "</h1>"
             return response
 
-    if res.resource_type == "CompositeResource" and not path.endswith(".zip"):
+    # aggregation logic only applies if the download request isn't a bag or a zipfile.
+    if not is_bag_download and not is_zip_download and \
+       res.resource_type == "CompositeResource":  # and not path.endswith(".zip"):
         for f in ResourceFile.objects.filter(object_id=res.id):
             if path == f.storage_path:
                 if f.has_logical_file and f.logical_file.is_single_file_aggregation:
@@ -73,6 +81,7 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
         istorage = IrodsStorage()
         federated_path = ''
         if 'environment' in kwargs:
+            logger.debug("setting iRODS from environment") 
             environment = int(kwargs['environment'])
             environment = m.RodsEnvironment.objects.get(pk=environment)
             session = Session("/tmp/django_irods", settings.IRODS_ICOMMANDS_PATH,
@@ -80,8 +89,10 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
             session.create_environment(environment)
             session.run('iinit', None, environment.auth)
         elif getattr(settings, 'IRODS_GLOBAL_SESSION', False):
+            logger.debug("using GLOBAL_SESSION") 
             session = GLOBAL_SESSION
         elif icommands.ACTIVE_SESSION:
+            logger.debug("using ACTIVE_SESSION") 
             session = icommands.ACTIVE_SESSION
         else:
             raise KeyError('settings must have IRODS_GLOBAL_SESSION set '
@@ -260,6 +271,7 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
             response['Content-Length'] = flen
             response['X-Accel-Redirect'] = '/'.join([
                 getattr(settings, 'IRODS_DATA_URI', '/irods-data'), path])
+            logger.debug("Reverse proxying local {}".format(response['X-Accel-Redirect']))
             return response
 
         elif res.resource_federation_path == userpath:  # this guarantees a "user" resource
@@ -274,12 +286,15 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
             response['Content-Length'] = flen
             response['X-Accel-Redirect'] = os.path.join(
                 getattr(settings, 'IRODS_USER_URI', '/irods-user'), path)
+            logger.debug("Reverse proxying user {}".format(response['X-Accel-Redirect']))
             return response
 
     # if we get here, none of the above conditions are true
+    # if reverse proxy is enabled, then this is because the resource is remote and federated
     if flen <= FILE_SIZE_LIMIT:
         options = ('-',)  # we're redirecting to stdout.
         # this unusual way of calling works for federated or local resources
+        logger.debug("Locally streaming {}".format(path))
         proc = session.run_safe('iget', None, path, *options)
         response = FileResponse(proc.stdout, content_type=mtype)
         response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
@@ -288,6 +303,7 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
         return response
 
     else:
+        logger.debug("Rejecting download of > 1GB file {}".format(path))
         content_msg = "File larger than 1GB cannot be downloaded directly via HTTP. " \
                       "Please download the large file via iRODS clients."
         response = HttpResponse(status=403)
