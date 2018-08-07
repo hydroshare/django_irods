@@ -91,10 +91,10 @@ class IrodsStorage(Storage):
         """
         run iRODS ibun command to generate zip file for a bag or other folder
         :param in_name: fully qualified irods name of folder to be zipped
-        :param out_name: fully qualified irods name of output zipfile. 
+        :param out_name: fully qualified irods name of output zipfile.
         :return: None
         """
-        # make directory containing output zipfile if necessary 
+        # make directory containing output zipfile if necessary
         self.session.run("imkdir", None, '-p', out_name.rsplit('/', 1)[0])
         # SessionException will be raised from run() in icommands.py
         self.session.run("ibun", None, '-cDzip', '-f', out_name, in_name)

@@ -2,7 +2,7 @@ import datetime
 import json
 import mimetypes
 import os
-import random
+# import random
 from uuid import uuid4
 
 from django.conf import settings
@@ -11,7 +11,7 @@ from django.http import HttpResponse, FileResponse, HttpResponseRedirect
 from rest_framework.decorators import api_view
 
 from django_irods import icommands
-from django_irods.storage import IrodsStorage
+# from django_irods.storage import IrodsStorage
 from hs_core.hydroshare import check_resource_type
 from hs_core.hydroshare.hs_bagit import create_bag_files
 from hs_core.hydroshare.resource import FILE_SIZE_LIMIT
@@ -39,11 +39,11 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
     The following variables are computed:
 
     * `path` is the public path of the thing to be downloaded.
-    * `irods_path` is the location of "path" in irods.
+    * `irods_path` is the location of `path` in irods.
     * `output_path` is the output path to be reported in the response object.
-    * `irods_output_path` is the location of "output_path" in irods
+    * `irods_output_path` is the location of `output_path` in irods
 
-    and there are six cases:
+    and there are seven cases:
 
     1. path points to a single file that is not a single-file-aggregation
        object in a composite resource.
@@ -53,16 +53,17 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
     4. path points to a bag that needs to be updated and then returned.
     5. path points to a folder that needs to be zipped.
     6. path points to a previously zipped file that was zipped asynchronously.
+    7. path points to a .zip file that -- when the .zip is removed -- is a file that can be zipped
 
     In cases 1, 3, 4, and 6 the output path is the input path.
-    In cases 2 and 5, the output path is created as a result of the operation
-    of zipping the object and its metadata into a new zipfile.
+    In cases 2, 5, and 7, the output path is created as a result of
+    the operation of zipping the object and its metadata into a new zipfile.
     """
     logger.debug("request path is {}".format(path))
 
     split_path_strs = path.split('/')
 
-    # initialize case variables 
+    # initialize case variables
     is_bag_download = False
     is_zip_download = False
     is_zip_request = False
@@ -75,11 +76,11 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
         res_id = os.path.splitext(split_path_strs[1])[0]
     elif split_path_strs[0] == 'zips':
         is_zip_download = True
-        # zips prefix now means that we are following up on an asynchronous download request
-        # format is zips/{date}/{zip-uuid}/{path}.zip where {path} contains the rid
+        # zips prefix means that we are following up on an asynchronous download request
+        # format is zips/{date}/{zip-uuid}/{public-path}.zip where {public-path} contains the rid
         logger.debug("fetching rid from zips field 3 = {}".format(split_path_strs[3]))
         res_id = split_path_strs[3]
-    else:
+    else:  # regular download request
         logger.debug("fetching rid from public path field 0 = {}".format(split_path_strs[0]))
         res_id = split_path_strs[0]
 
@@ -99,11 +100,13 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
             response.content = "<h1>" + content_msg + "</h1>"
             return response
 
-    # default values are changed later
+    # default values are changed later as needed
+    istorage = res.get_irods_storage()
     if res.is_federated:
         irods_path = os.path.join(res.resource_federation_path, path)
     else:
         irods_path = path
+    # in many cases, path and output_path are the same.
     output_path = path
     irods_output_path = irods_path
 
@@ -112,40 +115,77 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
         logger.debug("split_path_strs[1:] is {}".format(split_path_strs[1:]))
         store_path = u'/'.join(split_path_strs[1:])  # data/contents/{path-to-something}
         logger.debug("store path is {}".format(store_path))
-        if res.is_folder(store_path):
+        if res.is_folder(store_path):  # automatically zip folders
             is_zip_request = True
             daily_date = datetime.datetime.today().strftime('%Y-%m-%d')
             output_path = "zips/{}/{}/{}.zip".format(daily_date, uuid4.hex(), path)
-            if res.is_federated: 
-                output_irods_path = os.path.join(res.resource_federation_path, output_path)
-            else: 
-                output_irods_path = output_path 
+            if res.is_federated:
+                irods_output_path = os.path.join(res.resource_federation_path, output_path)
+            else:
+                irods_output_path = output_path
+            logger.debug("automatically zipping folder {} to {}".format(path, output_path))
+        elif istorage.exists(irods_path):
+            logger.debug("forwarding file {} unzipped".format(path))
+        else:  # special case: single file compression request: add .zip to existing file
+            root, ext = os.path.splitext(path)
+            irods_root, ext = os.path.splitext(irods_path)
+            if ext == '.zip' and istorage.exists(irods_root):
+                # single-file zip request invoked by ending a path in .zip
+                # (This also works for folders but is unnecessary)
+                path = root  # strip .zip suffix from request
+                irods_path = irods_root
+                daily_date = datetime.datetime.today().strftime('%Y-%m-%d')
+                output_path = "zips/{}/{}/{}.zip".format(daily_date, uuid4.hex(), root)
+                if res.is_federated:
+                    irods_output_path = os.path.join(res.resource_federation_path, output_path)
+                else:
+                    irods_output_path = output_path
+                logger.debug("zipping file {} to {}".format(root, output_path))
 
-    # aggregation logic only applies if the download request isn't a bag, zipfile, or folder, 
+                if "data/contents/" in path:  # not a metadata file
+                    short_path = path.split("data/contents/")[1]
+                    for f in ResourceFile.objects.filter(object_id=res.id, short_path=short_path):
+                        if path == f.storage_path:
+                            if f.has_logical_file and f.logical_file.is_single_file_aggregation:
+                                is_sf_agg_file = True
+                            break
+            if not is_sf_agg_file:
+                is_zip_request = True
+            # At this point, either is_zip_request or is_sf_agg_file is True.
+            # NOTE: there is an existence check below for the final path
+            # NOTE: metadata is automatically appended if the file is a single-file-aggregation
+
+    # at this point, we've modified the output_path and irods_output_path for three cases.
+    # aggregation logic only applies if the download request isn't a bag, zipfile, or folder,
     # and the thing to be downloaded is a "single file aggregation" object.
     if not is_bag_download and not is_zip_download and not is_zip_request and \
-       res.resource_type == "CompositeResource":
-        for f in ResourceFile.objects.filter(object_id=res.id):
-            if path == f.storage_path:
-                if f.has_logical_file and f.logical_file.is_single_file_aggregation:
-                    is_sf_agg_file = True
-                    daily_date = datetime.datetime.today().strftime('%Y-%m-%d')
-                    output_path = "zips/{}/{}/{}.zip".format(daily_date, uuid4.hex(), path)
-                    if res.is_federated: 
-                        output_irods_path = os.path.join(res.resource_federation_path, output_path)
-                    else: 
-                        output_irods_path = output_path 
+       res.resource_type == 'CompositeResource':
+        if 'data/contents/' in path:  # not a metadata file
+            short_path = path.split('data/contents/')[1]  # after data/contents/
+            for f in ResourceFile.objects.filter(object_id=res.id, short_path=short_path):
+                if path == f.storage_path:
+                    if f.has_logical_file and f.logical_file.is_single_file_aggregation:
+                        is_sf_agg_file = True
+                        daily_date = datetime.datetime.today().strftime('%Y-%m-%d')
+                        output_path = "zips/{}/{}/{}.zip".format(daily_date, uuid4.hex(), path)
+                        if res.is_federated:
+                            irods_output_path = os.path.join(res.resource_federation_path,
+                                                             output_path)
+                        else:
+                            irods_output_path = output_path
+                break
+            if not is_sf_agg_file:  # still deliver zip even if not an aggregation file
+                is_zip_request = True
 
     # After this point, we have valid path, irods_path, output_path, and irods_output_path
-    # The following flags have also been set:
+    # At most one of the following flags has also been set:
     # * is_bag_download: download a bag in format bags/{rid}.zip
     # * is_zip_download: download a zipfile in format zips/{date}/{random guid}/{path}.zip
     # * is_zip_request: path is a folder; zip before returning
     # * is_sf_agg_file: path is a single-file aggregation in Composite Resource, return a zip
     # if none of these are set, it's a normal download
 
-    # determine federation path
-    istorage = res.get_irods_storage()
+    # determine active session
     if res.is_federated:
         # the resource is stored in federated zone
         session = icommands.ACTIVE_SESSION
@@ -173,21 +213,16 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
 
     resource_cls = check_resource_type(res.resource_type)
 
-    if is_bag_download:
+    if is_zip_download:
+        pass  # zip already created; will be handled at the end; no further action necessary
 
-    elif is_zip_download:
     elif is_zip_request or is_sf_agg_file:
-        if res.resource_type == "CompositeResource":
-            short_path = input_path[len('/data/contents/'):]  # strip /data/contents/
-            res.create_aggregation_xml_documents(aggregation_name=short_path)
 
         if use_async:
             # TODO: Why is there a wait of 3 seconds here? Changes so far have been synchronous!
-            # TODO: Ensure that this works for federated files.
-            task = create_temp_zip.apply_async((res_id, irods_input_path, irods_output_path,
+            task = create_temp_zip.apply_async((res_id, irods_path, irods_output_path,
                                                 is_sf_agg_file), countdown=3)
             # TODO: 20 minutes might not be enough if the zipfile is large.
-            # TODO: this does not delete the working files! 
             delete_zip.apply_async((irods_output_path, ),
                                    countdown=(20 * 60))  # delete after 20 minutes
 
@@ -203,52 +238,49 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
             request.session['download_path'] = output_path  # path once async is done
 
             return HttpResponseRedirect(res.get_absolute_url())
-        else:
-            # TODO: ensure that this works in federated mode.
-            ret_status = create_temp_zip(res_id, irods_input_path, irods_output_path, 
+        else:  # synchronous creation of download
+            ret_status = create_temp_zip(res_id, irods_path, irods_output_path,
                                          is_sf_agg_file)
+            # TODO: 20 minutes might not be enough if the zipfile is large.
             delete_zip.apply_async((irods_output_path, ),
                                    countdown=(20 * 60))  # delete after 20 minutes
             if not ret_status:
-                content_msg = "Zip cannot be created successfully. Check log for details."
+                content_msg = "Zip could not be created."
                 response = HttpResponse()
                 if rest_call:
                     response.content = content_msg
                 else:
                     response.content = "<h1>" + content_msg + "</h1>"
                 return response
-
-            logger.debug("output path is now {}".format(output_path))
+            # At this point, output_path presumably exists and contains a zipfile
 
     elif is_bag_download:
+        # Shorten request if it contains extra junk
+        logger.debug("bag output path is {}".format(output_path))
+        bag_file_name = res_id + '.zip'
+        output_path = os.path.join('bags', bag_file_name)
+        if not res.is_federated:
+            irods_output_path = output_path
+        else:
+            irods_output_path = os.path.join(res.resource_federation_path, output_path)
+        logger.debug("bag output path is {}".format(output_path))
 
-        bag_modified = istorage.getAVU(res.root_path, 'bag_modified')
-        # make sure if bag_modified is not set to true, we still recreate the bag if the
-        # bag file does not exist for some reason to resolve the error to download a nonexistent
-        # bag when bag_modified is false due to the flag being out-of-sync with the real bag status
-        if bag_modified is None or bag_modified.lower() == "false":
-            # check whether the bag file exists
-            bag_file_name = res_id + '.zip'
-            output_path = os.path.join('bags', bag_file_name)
-            if not res.is_federated:
-                irods_output_path = output_path
-            else:
-                irods_output_path = os.path.join(res.resource_federation_path, output_path)
-            # set bag_modified to 'true' if the bag does not exist so that it can be recreated
-            # and the bag_modified AVU will be set correctly as well subsequently
+        bag_modified = res.getAVU('bag_modified')
+        # recreate the bag if it doesn't exist even if bag_modified is "false".
+        if bag_modified is None or not bag_modified:
             if not istorage.exists(irods_output_path):
-                bag_modified = 'true'
+                bag_modified = True
 
         # send signal for pre_check_bag_flag
         # this generates metadata other than that generated by create_bag_files.
         pre_check_bag_flag.send(sender=resource_cls, resource=res)
 
-        metadata_dirty = istorage.getAVU(res.root_path, 'metadata_dirty')
-        if metadata_dirty is None or metadata_dirty.lower() == 'true':
-            create_bag_files(res)
+        metadata_dirty = res.getAVU('metadata_dirty')
+        if metadata_dirty is None or metadata_dirty:
+            create_bag_files(res)  # sets metadata_dirty to False
             bag_modified = "True"
 
-        if bag_modified is None or bag_modified.lower() == "true":
+        if bag_modified is None or bag_modified:
             if use_async:
                 # task parameter has to be passed in as a tuple or list, hence (res_id,) is needed
                 # Note that since we are using JSON for task parameter serialization, no complex
@@ -276,24 +308,28 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
     else:  # regular file download
         # if fetching main metadata files, then these need to be refreshed.
         if path.endswith("resourcemap.xml") or path.endswith('resourcemetadata.xml'):
-            if metadata_dirty is None or metadata_dirty.lower() == 'true':
-                create_bag_files(res)
+            if metadata_dirty is None or metadata_dirty:
+                create_bag_files(res)  # sets metadata_dirty to False
 
         # send signal for pre download file
         # TODO: does not contain subdirectory information: duplicate refreshes possible
-        download_file_name = split_path_strs[-1]
+        download_file_name = split_path_strs[-1]  # end of path
         pre_download_file.send(sender=resource_cls, resource=res,
                                download_file_name=download_file_name,
                                request=request)
 
+    # If we get this far,
+    # * path and irods_path point to true input
+    # * output_path and irods_output_path point to true output.
+    # Try to return the file
+
     # obtain mime_type to set content_type
     mtype = 'application-x/octet-stream'
-    mime_type = mimetypes.guess_type(path)
+    mime_type = mimetypes.guess_type(output_path)
     if mime_type[0] is not None:
         mtype = mime_type[0]
     # retrieve file size to set up Content-Length header
-    # TODO: make sure this includes federation header.
-    stdout = session.run("ils", None, "-l", path)[0].split()
+    stdout = session.run("ils", None, "-l", irods_output_path)[0].split()
     flen = int(stdout[3])
 
     # Allow reverse proxy if request was forwarded by nginx (HTTP_X_DJANGO_REVERSE_PROXY='true')
@@ -326,8 +362,8 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
             getattr(settings, 'HS_LOCAL_PROXY_USER_IN_FED_ZONE', 'localHydroProxy'))
 
         # stop NGINX targets that are non-existent from hanging forever.
-        if not istorage.exists(path):
-            content_msg = "file path {} does not exist in iRODS".format(path)
+        if not istorage.exists(irods_output_path):
+            content_msg = "file path {} does not exist in iRODS".format(output_path)
             response = HttpResponse(status=404)
             if rest_call:
                 response.content = content_msg
@@ -339,25 +375,21 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
             # invoke X-Accel-Redirect on physical vault file in nginx
             response = HttpResponse(content_type=mtype)
             response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
-                name=path.split('/')[-1])
+                name=output_path.split('/')[-1])
             response['Content-Length'] = flen
             response['X-Accel-Redirect'] = '/'.join([
-                getattr(settings, 'IRODS_DATA_URI', '/irods-data'), path])
+                getattr(settings, 'IRODS_DATA_URI', '/irods-data'), output_path])
             logger.debug("Reverse proxying local {}".format(response['X-Accel-Redirect']))
             return response
 
         elif res.resource_federation_path == userpath:  # this guarantees a "user" resource
             # invoke X-Accel-Redirect on physical vault file in nginx
-            # if path is full user path; strip federation prefix
-            if path.startswith(userpath):
-                path = path[len(userpath)+1:]
-            # invoke X-Accel-Redirect on physical vault file in nginx
             response = HttpResponse(content_type=mtype)
             response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
-                name=path.split('/')[-1])
+                name=output_path.split('/')[-1])
             response['Content-Length'] = flen
             response['X-Accel-Redirect'] = os.path.join(
-                getattr(settings, 'IRODS_USER_URI', '/irods-user'), path)
+                getattr(settings, 'IRODS_USER_URI', '/irods-user'), output_path)
             logger.debug("Reverse proxying user {}".format(response['X-Accel-Redirect']))
             return response
 
@@ -367,16 +399,16 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
     if flen <= FILE_SIZE_LIMIT:
         options = ('-',)  # we're redirecting to stdout.
         # this unusual way of calling works for federated or local resources
-        logger.debug("Locally streaming {}".format(path))
-        proc = session.run_safe('iget', None, path, *options)
+        logger.debug("Locally streaming {}".format(output_path))
+        proc = session.run_safe('iget', None, irods_output_path, *options)
         response = FileResponse(proc.stdout, content_type=mtype)
         response['Content-Disposition'] = 'attachment; filename="{name}"'.format(
-            name=path.split('/')[-1])
+            name=output_path.split('/')[-1])
         response['Content-Length'] = flen
         return response
 
     else:
-        logger.debug("Rejecting download of > 1GB file {}".format(path))
+        logger.debug("Rejecting download of > 1GB file {}".format(output_path))
         content_msg = "File larger than 1GB cannot be downloaded directly via HTTP. " \
                       "Please download the large file via iRODS clients."
         response = HttpResponse(status=403)
