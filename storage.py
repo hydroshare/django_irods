@@ -253,8 +253,8 @@ class IrodsStorage(Storage):
                 if len(line) != 7:
                     # the last line is empty
                     continue
-                filename = stdout[i].split()[6]
-                size = stdout[i].split()[3]
+                filename = line[6]
+                size = line[3]
                 if filename:
                     listing[1].append(filename)
                     listing[2].append(size)
