@@ -257,7 +257,7 @@ class IrodsStorage(Storage):
                 line = stdout[i].split(None, 6)
                 if len(line) < 6:
                     # the last line is empty
-                    continue;
+                    continue
                 if line[1] != '0':
                     # filter replicas
                     continue
