@@ -53,13 +53,13 @@ def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=T
         else:
             response.content = "<h1>" + content_msg + "</h1>"
             return response
-
+    ''' This shouldn't have been released yet and will be reactivated with the Composite Resource
     if res.resource_type == "CompositeResource" and not path.endswith(".zip"):
         for f in ResourceFile.objects.filter(object_id=res.id):
             if path == f.storage_path:
                 if f.has_logical_file and f.logical_file.is_single_file_aggregation:
                     is_sf_agg_file = True
-
+    '''
     if res.resource_federation_path:
         # the resource is stored in federated zone
         istorage = IrodsStorage('federated')
