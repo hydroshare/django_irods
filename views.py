@@ -20,7 +20,7 @@ from hs_core.tasks import create_bag_by_irods, create_temp_zip, delete_zip
 from hs_core.views.utils import authorize, ACTION_TO_AUTHORIZE
 from . import models as m
 from .icommands import Session, GLOBAL_SESSION
-from hs_core.models import ResourceFile
+#from hs_core.models import ResourceFile
 
 
 def download(request, path, rest_call=False, use_async=True, use_reverse_proxy=True,
